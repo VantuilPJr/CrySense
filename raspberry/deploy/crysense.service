@@ -1,0 +1,18 @@
+[Unit]
+Description=CrySense local monitor
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crysense
+Group=crysense
+WorkingDirectory=/opt/crysense
+EnvironmentFile=/etc/crysense.env
+ExecStart=/opt/crysense/.venv/bin/uvicorn crysense.app:app --host 0.0.0.0 --port 8080 --timeout-graceful-shutdown 5
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

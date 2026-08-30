@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crysense"
+version = "0.1.0"
+description = "Monitor local de choro infantil para Raspberry Pi"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "numpy>=2.1,<3",
+  "scikit-learn>=1.6,<2",
+  "joblib>=1.4,<2",
+  "sounddevice>=0.5,<1",
+  "python-multipart>=0.0.12,<1",
+]
+
+[project.optional-dependencies]
+camera = ["opencv-python-headless>=4.10,<5"]
+pi = [
+  "adafruit-blinka>=8.50,<9",
+  "adafruit-circuitpython-bme280>=2.6,<3",
+  "adafruit-circuitpython-rgb-display>=3.12,<4",
+  "pillow>=10,<12",
+]
+webrtc = ["aiortc>=1.9,<2"]
+vision = [
+  "opencv-python>=4.10,<5",
+  "ultralytics>=8.3,<9",
+]
+dev = ["pytest>=8,<9", "ruff>=0.8,<1", "httpx2>=2,<3"]
+
+[project.scripts]
+crysense = "crysense.app:main"
+crysense-train = "crysense.training:main"
+crysense-devices = "crysense.devices:main"
+crysense-vision = "crysense.vision_service:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+crysense = ["static/*.html"]
+
+[tool.ruff.lint]
+# As falhas de dispositivos e bibliotecas opcionais precisam ser isoladas para
+# que o painel continue acessível mesmo sem um periférico conectado.
+ignore = ["BLE001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

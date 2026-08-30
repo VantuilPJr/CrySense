@@ -1,0 +1,51 @@
+/dts-v1/;
+/plugin/;
+
+/*
+ * CrySense: INMP441 (capture) + MAX98357A (playback) on one I2S bus.
+ *
+ * Both modules use GPIO18 BCLK and GPIO19 LRCLK.  The Raspberry Pi is the
+ * clock master; the INMP441 drives GPIO20 (DIN) and the MAX98357A consumes
+ * GPIO21 (DOUT). Neither module needs I2C/SPI codec control. The Raspberry
+ * Pi hifiberry-dac8x machine driver supplies its built-in dummy codec and
+ * creates the full-duplex ALSA device.
+ */
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target = <&i2s_clk_producer>;
+        __overlay__ {
+            status = "okay";
+        };
+    };
+
+    /*
+     * The dac8x driver enables its capture path when "hasadc" is high.
+     * GPIO22 (physical pin 15) is unused by CrySense and is internally
+     * pulled high; do not connect anything to this pin.
+     */
+    fragment@1 {
+        target = <&gpio>;
+        __overlay__ {
+            crysense_hasadc_pins: crysense_hasadc_pins {
+                brcm,pins = <22>;
+                brcm,function = <0>; /* input */
+                brcm,pull = <2>;     /* pull-up */
+            };
+        };
+    };
+
+    fragment@2 {
+        target = <&sound>;
+        __overlay__ {
+            compatible = "hifiberry,hifiberry-dac8x";
+            i2s-controller = <&i2s_clk_producer>;
+            pinctrl-names = "default";
+            pinctrl-0 = <&crysense_hasadc_pins>;
+            hasadc-gpios = <&gpio 22 0>;
+            status = "okay";
+        };
+    };
+};

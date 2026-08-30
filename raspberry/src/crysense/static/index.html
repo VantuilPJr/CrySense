@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eff6ff">
+  <title>CrySense</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #eff6ff; color: #0f172a; }
+    body { max-width: 860px; min-height: 100vh; margin: 0 auto; padding: 16px; background: linear-gradient(180deg, #f8fcff 0, #eff6ff 46%, #f8fbff 100%); }
+    header { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 6px 2px 10px; }
+    h1 { margin: 8px 0 2px; color: #1e3a8a; font-size: 1.65rem; letter-spacing: -.03em; } p { color: #64748b; }
+    .badge { border: 1px solid #bfdbfe; border-radius: 999px; padding: 6px 10px; color: #1e40af; background: #ffffffdf; font-size: .78rem; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 8px #2563eb0d; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+    .card { background: #fff; border: 1px solid #dbeafe; border-radius: 16px; padding: 14px; box-shadow: 0 4px 15px #2563eb0d, 0 1px 3px #0f172a0d; }
+    .label { color: #64748b; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .value { font-size: 1.2rem; font-weight: 700; margin-top: 5px; }
+    .detail { color: #64748b; font-size: .82rem; margin: 5px 0 0; }
+    .video-card { position: relative; padding: 0; overflow: hidden; min-height: 210px; background: #e0f2fe; }
+    #video { width: 100%; min-height: 210px; max-height: 470px; object-fit: cover; display: block; }
+    #risk-zone-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+    #risk-zone-canvas.editing { pointer-events: auto; cursor: crosshair; }
+    #camera-message { display: grid; place-items: center; min-height: 210px; padding: 0 18px; color: #475569; text-align: center; }
+    .video-label { position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 7px; color: #1e3a8a; background: #ffffffeb; border: 1px solid #bfdbfe; border-radius: 999px; padding: 6px 10px; font-size: .75rem; font-weight: 700; box-shadow: 0 2px 8px #1e40af1a; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #dc2626; display: inline-block; }
+    .dot.good { background: #059669; box-shadow: 0 0 8px #10b98180; } .dot.warning { background: #d97706; }
+    .good { color: #059669; } .warning { color: #d97706; } .bad { color: #dc2626; }
+    .meter { height: 9px; background: #dbeafe; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .meter > div { height: 100%; width: 0; background: linear-gradient(90deg, #7dd3fc, #3b82f6); transition: width .25s ease; }
+    ul { list-style: none; padding: 0; margin: 0; } li { padding: 11px 0; border-bottom: 1px solid #e0f2fe; }
+    li:last-child { border: 0; } .event { display: flex; justify-content: space-between; gap: 12px; }
+    small { color: #64748b; } .hidden { display: none !important; }
+    .upload-card { margin-top: 12px; } .upload-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    input[type=file] { max-width: 100%; color: #475569; font: inherit; } button { border: 0; border-radius: 10px; background: #2563eb; color: #fff; padding: 9px 13px; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; } #upload-result { min-height: 1.3em; margin: 10px 0 0; font-size: .88rem; color: #475569; }
+    .secondary-button { background: #e0f2fe; color: #1e40af; border: 1px solid #bfdbfe; }
+    .zone-card { margin-top: 12px; } #zone-result { min-height: 1.3em; margin: 10px 0 0; font-size: .88rem; color: #475569; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>CrySense</h1><p>Monitoramento local — vídeo, áudio e ambiente</p></div>
+    <div id="connection" class="badge warning">Conectando…</div>
+  </header>
+
+  <section class="card video-card">
+    <img id="video" class="hidden" alt="Vídeo ao vivo da webcam">
+    <canvas id="risk-zone-canvas" class="hidden" aria-label="Área de risco desenhada sobre o vídeo"></canvas>
+    <div id="camera-message">Inicializando webcam…</div>
+    <div id="camera-state" class="video-label hidden"><span id="camera-dot" class="dot"></span><span id="camera-text">WEBCAM</span></div>
+  </section>
+
+  <section class="card zone-card">
+    <div class="label">Zona visual de risco</div>
+    <p class="detail">Para a demonstração, marque a área acima ou do lado externo da grade. Quando uma pessoa for detectada nela por alguns quadros, o PC envia o alerta.</p>
+    <div class="upload-controls">
+      <button id="draw-zone" class="secondary-button" type="button">Marcar sobre o vídeo</button>
+      <button id="save-zone" type="button" disabled>Salvar marcação</button>
+      <button id="clear-zone" class="secondary-button" type="button">Remover marcação</button>
+    </div>
+    <p id="zone-result" aria-live="polite">Nenhuma área marcada. Desenhe a região do berço que deseja monitorar.</p>
+  </section>
+
+  <section class="grid" style="margin-top:12px">
+    <article class="card"><div class="label">Monitoramento</div><div id="phase" class="value">Inicializando</div><p id="prediction" class="detail">Aguardando IA</p></article>
+    <article class="card"><div class="label">Microfone</div><div id="audio-state" class="value">Verificando…</div><p id="audio-detail" class="detail">Sem dados de áudio</p><div class="meter"><div id="audio-meter"></div></div></article>
+    <article class="card"><div class="label">Temperatura</div><div id="temperature" class="value">-- °C</div><p id="humidity" class="detail">Umidade: -- %</p></article>
+    <article class="card"><div class="label">Modelos</div><div id="models" class="value">--</div><p id="system-detail" class="detail">Verificando periféricos</p></article>
+    <article class="card"><div class="label">Visão no computador</div><div id="vision-state" class="value">Não conectada</div><p id="vision-detail" class="detail">Aguardando serviço visual</p></article>
+  </section>
+
+  <section class="card upload-card">
+    <div class="label">Analisar áudio para demonstração</div>
+    <p class="detail">Em locais barulhentos, envie um WAV PCM salvo no computador. Se cólica ou fome for confirmada, o sistema gera o mesmo alerta do monitoramento ao vivo.</p>
+    <div class="upload-controls">
+      <input id="audio-upload" type="file" accept=".wav,audio/wav,audio/x-wav">
+      <button id="analyze-upload" type="button">Analisar arquivo</button>
+    </div>
+    <p id="upload-result" aria-live="polite"></p>
+  </section>
+
+  <section class="card" style="margin-top:12px"><div class="label">Ocorrências recentes</div><ul id="events"><li>Nenhuma ocorrência registrada.</li></ul></section>
+  <p><small>O CrySense é um apoio de monitoramento, não substitui avaliação profissional de saúde ou o cuidado de um responsável.</small></p>
+
+  <script>
+    const byId = id => document.getElementById(id);
+    const video = byId('video');
+    const cameraMessage = byId('camera-message');
+    const zoneCanvas = byId('risk-zone-canvas');
+    const zoneContext = zoneCanvas.getContext('2d');
+    let riskZone = null;
+    let visionDetections = [];
+    let draftZone = null;
+    let zoneStartPoint = null;
+    let drawingZone = false;
+    let editingZone = false;
+    let streamOpen = false;
+    const text = (element, value, kind = '') => { element.textContent = value; element.className = `value ${kind}`; };
+    const human = label => ({cry:'choro', noise:'ruído', colic:'cólica', hunger:'fome', monitoring:'monitorando', capturing_type_audio:'analisando choro', idle:'aguardando', error:'erro'})[label] || label || '--';
+    const percent = value => `${Math.round((value || 0) * 100)}%`;
+
+    const clamp = value => Math.max(0, Math.min(1, value));
+
+    function drawRiskZone() {
+      const rect = zoneCanvas.getBoundingClientRect();
+      if (!rect.width || !rect.height || video.classList.contains('hidden')) return;
+      const scale = window.devicePixelRatio || 1;
+      const width = Math.round(rect.width * scale);
+      const height = Math.round(rect.height * scale);
+      if (zoneCanvas.width !== width || zoneCanvas.height !== height) {
+        zoneCanvas.width = width; zoneCanvas.height = height;
+      }
+      zoneContext.setTransform(scale, 0, 0, scale, 0, 0);
+      zoneContext.clearRect(0, 0, rect.width, rect.height);
+      const zone = draftZone || riskZone;
+      if (zone) {
+        const x = zone[0] * rect.width;
+        const y = zone[1] * rect.height;
+        const widthPx = (zone[2] - zone[0]) * rect.width;
+        const heightPx = (zone[3] - zone[1]) * rect.height;
+        zoneContext.fillStyle = 'rgba(217, 119, 6, .20)';
+        zoneContext.fillRect(x, y, widthPx, heightPx);
+        zoneContext.strokeStyle = '#d97706';
+        zoneContext.lineWidth = 2;
+        zoneContext.setLineDash([7, 5]);
+        zoneContext.strokeRect(x + 1, y + 1, Math.max(0, widthPx - 2), Math.max(0, heightPx - 2));
+        zoneContext.setLineDash([]);
+        zoneContext.fillStyle = '#9a3412';
+        zoneContext.font = '700 12px system-ui, sans-serif';
+        zoneContext.fillText(editingZone ? 'ARRASTE PARA MARCAR' : 'ÁREA DE RISCO', x + 7, Math.max(16, y + 18));
+      }
+      for (const detection of visionDetections) {
+        if (!Array.isArray(detection.box) || detection.box.length !== 4) continue;
+        const [x1, y1, x2, y2] = detection.box;
+        const boxX = x1 * rect.width;
+        const boxY = y1 * rect.height;
+        const boxWidth = (x2 - x1) * rect.width;
+        const boxHeight = (y2 - y1) * rect.height;
+        zoneContext.strokeStyle = '#0284c7';
+        zoneContext.lineWidth = 2;
+        zoneContext.strokeRect(boxX, boxY, boxWidth, boxHeight);
+        const label = `${detection.label} ${Math.round((detection.confidence || 0) * 100)}%`;
+        zoneContext.font = '700 12px system-ui, sans-serif';
+        const textWidth = zoneContext.measureText(label).width;
+        zoneContext.fillStyle = '#0284c7';
+        zoneContext.fillRect(boxX, Math.max(0, boxY - 18), textWidth + 10, 18);
+        zoneContext.fillStyle = '#fff';
+        zoneContext.fillText(label, boxX + 5, Math.max(13, boxY - 5));
+      }
+    }
+
+    function zonePoint(event) {
+      const rect = zoneCanvas.getBoundingClientRect();
+      return [clamp((event.clientX - rect.left) / rect.width), clamp((event.clientY - rect.top) / rect.height)];
+    }
+
+    function rectangleFrom(first, second) {
+      return [Math.min(first[0], second[0]), Math.min(first[1], second[1]), Math.max(first[0], second[0]), Math.max(first[1], second[1])];
+    }
+
+    function startZoneMarking() {
+      if (video.classList.contains('hidden')) {
+        byId('zone-result').textContent = 'Aguarde o vídeo ao vivo aparecer para fazer a marcação.';
+        byId('zone-result').className = 'warning';
+        return;
+      }
+      editingZone = true; draftZone = null;
+      zoneCanvas.classList.remove('hidden'); zoneCanvas.classList.add('editing');
+      byId('draw-zone').textContent = 'Arraste sobre o vídeo';
+      byId('zone-result').textContent = 'Clique e arraste sobre a região de risco da grade.';
+      byId('zone-result').className = 'warning';
+      drawRiskZone();
+    }
+
+    async function saveRiskZone() {
+      const result = byId('zone-result');
+      const button = byId('save-zone');
+      if (!riskZone || riskZone[2] - riskZone[0] < .02 || riskZone[3] - riskZone[1] < .02) {
+        result.textContent = 'Faça uma marcação maior sobre o vídeo antes de salvar.'; result.className = 'bad'; return;
+      }
+      button.disabled = true; result.className = ''; result.textContent = 'Salvando área de risco…';
+      try {
+        const response = await fetch('/api/vision/config', {
+          method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({risk_zone: riskZone})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar a marcação.');
+        riskZone = data.risk_zone;
+        result.textContent = 'Marcação salva. O monitor no PC aplica a nova área em até 2 segundos.';
+        result.className = 'good'; drawRiskZone();
+      } catch (error) {
+        result.textContent = error.message || 'Não foi possível salvar a marcação.'; result.className = 'bad';
+      } finally { button.disabled = false; }
+    }
+
+    async function clearRiskZone() {
+      const result = byId('zone-result');
+      const button = byId('clear-zone');
+      button.disabled = true; result.className = ''; result.textContent = 'Removendo marcação…';
+      try {
+        const response = await fetch('/api/vision/config', {
+          method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({risk_zone: null})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível remover a marcação.');
+        riskZone = null; draftZone = null; editingZone = false;
+        zoneCanvas.classList.remove('editing'); byId('draw-zone').textContent = 'Marcar sobre o vídeo';
+        byId('save-zone').disabled = true;
+        result.textContent = 'Marcação removida. A visão ficará sem alertas até você desenhar uma nova área.';
+        result.className = 'good'; drawRiskZone();
+      } catch (error) {
+        result.textContent = error.message || 'Não foi possível remover a marcação.'; result.className = 'bad';
+      } finally { button.disabled = false; }
+    }
+
+    async function loadRiskZone() {
+      try {
+        const response = await fetch('/api/vision/config', {cache: 'no-store'});
+        const data = await response.json();
+        if (response.ok && Array.isArray(data.risk_zone) && data.risk_zone.length === 4) {
+          riskZone = data.risk_zone;
+          byId('zone-result').textContent = 'Área salva carregada. Ajuste-a se a posição da câmera mudou.';
+        }
+      } catch (_) {
+        // O painel continua utilizável com a área padrão se a API ainda estiver iniciando.
+      }
+      drawRiskZone();
+    }
+
+    function renderEvents(events) {
+      const root = byId('events');
+      root.innerHTML = events.length ? events.map(event => `<li><div class="event"><strong>${human(event.label).toUpperCase()}</strong><strong>${Math.round(event.confidence * 100)}%</strong></div><small>${new Date(event.timestamp).toLocaleString('pt-BR')}</small></li>`).join('') : '<li>Nenhuma ocorrência registrada.</li>';
+    }
+
+    function setCamera(status) {
+      const camera = status.camera;
+      const fresh = camera.running && (camera.frame_age_seconds === null || camera.frame_age_seconds < 3);
+      const state = byId('camera-state');
+      const dot = byId('camera-dot');
+      const label = byId('camera-text');
+      state.classList.remove('hidden');
+      if (fresh) {
+        dot.className = 'dot good';
+        label.textContent = `AO VIVO · ${camera.fps} FPS`;
+        if (!streamOpen) {
+          video.src = `/api/camera/stream?frame=${camera.frames}&t=${Date.now()}`;
+          streamOpen = true;
+        }
+        zoneCanvas.classList.remove('hidden');
+        drawRiskZone();
+        return;
+      }
+      dot.className = 'dot warning';
+      label.textContent = 'WEBCAM RECONECTANDO';
+      if (streamOpen) {
+        video.removeAttribute('src');
+        streamOpen = false;
+      }
+      video.classList.add('hidden');
+      zoneCanvas.classList.add('hidden');
+      cameraMessage.classList.remove('hidden');
+      const age = camera.frame_age_seconds == null ? '' : ` Último quadro há ${Math.ceil(camera.frame_age_seconds)} s.`;
+      cameraMessage.textContent = (camera.error || 'Aguardando quadros novos da webcam.') + age;
+    }
+
+    function setAudio(status) {
+      const audio = status.audio;
+      const listening = audio.listening;
+      text(byId('audio-state'), listening ? 'Ouvindo agora' : 'Não está ouvindo', listening ? 'good' : (audio.error ? 'bad' : 'warning'));
+      const level = audio.level_rms || 0;
+      byId('audio-meter').style.width = `${Math.min(100, Math.round(level * 800))}%`;
+      byId('audio-detail').textContent = audio.error || (listening ? `Sinal atual: ${percent(level)} · pico ${percent(audio.level_peak)}` : 'Aguardando o próximo bloco de áudio');
+    }
+
+    function setPrediction(pipeline) {
+      text(byId('phase'), human(pipeline.phase), pipeline.last_error ? 'bad' : 'good');
+      const trigger = pipeline.last_trigger;
+      const type = pipeline.last_type;
+      const triggerText = trigger ? `IA 1: ${human(trigger.label)} ${Math.round(trigger.confidence * 100)}%` : 'IA 1 aguardando áudio';
+      const typeText = type ? ` · IA 2: ${human(type.label)} ${Math.round(type.confidence * 100)}%` : '';
+      byId('prediction').textContent = pipeline.last_error || triggerText + typeText;
+    }
+
+    function setVision(status) {
+      const vision = status.vision || {};
+      visionDetections = Array.isArray(vision.detections) ? vision.detections : [];
+      drawRiskZone();
+      if (!vision.connected) {
+        text(byId('vision-state'), 'Não conectada', 'warning');
+        byId('vision-detail').textContent = vision.detail || 'Aguardando serviço visual';
+        return;
+      }
+      if (vision.alert) {
+        text(byId('vision-state'), 'Alerta visual', 'bad');
+        byId('vision-detail').textContent = `${human(vision.label)}${vision.confidence == null ? '' : ` ${Math.round(vision.confidence * 100)}%`} · ${vision.detail || 'Verifique o berço'}`;
+        return;
+      }
+      text(byId('vision-state'), vision.state === 'error' ? 'Indisponível' : 'Monitorando', vision.state === 'error' ? 'warning' : 'good');
+      byId('vision-detail').textContent = vision.detail || 'Câmera analisada no computador';
+    }
+
+    async function analyzeUpload() {
+      const input = byId('audio-upload');
+      const button = byId('analyze-upload');
+      const result = byId('upload-result');
+      const file = input.files && input.files[0];
+      if (!file) { result.textContent = 'Selecione um arquivo WAV PCM para analisar.'; result.className = 'bad'; return; }
+      button.disabled = true; result.className = ''; result.textContent = 'Analisando localmente…';
+      try {
+        const form = new FormData(); form.append('audio', file, file.name);
+        const response = await fetch('/api/audio/analyze', { method: 'POST', body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Falha ao analisar o áudio.');
+        const trigger = `IA 1: ${human(data.trigger.label)} ${Math.round(data.trigger.confidence * 100)}%`;
+        const type = data.classification ? ` · IA 2: ${human(data.classification.label)} ${Math.round(data.classification.confidence * 100)}%` : '';
+        result.textContent = `${trigger}${type}. ${data.message}`;
+        result.className = data.classification ? 'good' : 'warning';
+      } catch (error) {
+        result.textContent = error.message || 'Não foi possível analisar o arquivo.';
+        result.className = 'bad';
+      } finally { button.disabled = false; }
+    }
+
+    async function refresh() {
+      try {
+        const [statusResponse, eventsResponse] = await Promise.all([fetch('/api/status', {cache: 'no-store'}), fetch('/api/events?limit=8', {cache: 'no-store'})]);
+        if (!statusResponse.ok || !eventsResponse.ok) throw new Error('Resposta inválida');
+        const status = await statusResponse.json();
+        const events = await eventsResponse.json();
+        byId('connection').textContent = 'Sistema conectado'; byId('connection').className = 'badge good';
+        setCamera(status); setAudio(status); setPrediction(status.pipeline); setVision(status);
+        text(byId('temperature'), status.sensor.temperature == null ? '-- °C' : `${status.sensor.temperature.toFixed(1)} °C`);
+        byId('humidity').textContent = status.sensor.humidity == null ? 'Umidade: -- %' : `Umidade: ${Math.round(status.sensor.humidity)} %`;
+        text(byId('models'), `${status.pipeline.trigger_ready ? 'IA1 ✓' : 'IA1 --'} · ${status.pipeline.type_ready ? 'IA2 ✓' : 'IA2 --'}`, status.pipeline.trigger_ready && status.pipeline.type_ready ? 'good' : 'warning');
+        byId('system-detail').textContent = status.tft_error || status.sensor.error || 'TFT, sensor e modelos monitorados';
+        renderEvents(events.events);
+      } catch (error) {
+        byId('connection').textContent = 'Sem conexão'; byId('connection').className = 'badge bad';
+        text(byId('phase'), 'Sem conexão', 'bad');
+      }
+    }
+    video.addEventListener('load', () => { video.classList.remove('hidden'); cameraMessage.classList.add('hidden'); zoneCanvas.classList.remove('hidden'); drawRiskZone(); });
+    video.addEventListener('error', () => { streamOpen = false; });
+    zoneCanvas.addEventListener('pointerdown', event => {
+      if (!editingZone) return;
+      drawingZone = true; const point = zonePoint(event); zoneStartPoint = point; draftZone = [point[0], point[1], point[0], point[1]];
+      zoneCanvas.setPointerCapture(event.pointerId); drawRiskZone(); event.preventDefault();
+    });
+    zoneCanvas.addEventListener('pointermove', event => {
+      if (!drawingZone || !draftZone) return;
+      const point = zonePoint(event); draftZone = rectangleFrom(zoneStartPoint, point); drawRiskZone();
+    });
+    const finishZoneMarking = event => {
+      if (!drawingZone || !draftZone) return;
+      const point = zonePoint(event); riskZone = rectangleFrom(zoneStartPoint, point);
+      drawingZone = false; draftZone = null; zoneStartPoint = null; editingZone = false;
+      zoneCanvas.classList.remove('editing'); byId('draw-zone').textContent = 'Refazer marcação';
+      byId('save-zone').disabled = false;
+      byId('zone-result').textContent = 'Marcação pronta. Toque em “Salvar marcação” para aplicá-la ao monitor.';
+      byId('zone-result').className = 'warning'; drawRiskZone();
+    };
+    zoneCanvas.addEventListener('pointerup', finishZoneMarking);
+    zoneCanvas.addEventListener('pointercancel', finishZoneMarking);
+    window.addEventListener('resize', drawRiskZone);
+    byId('draw-zone').addEventListener('click', startZoneMarking);
+    byId('save-zone').addEventListener('click', saveRiskZone);
+    byId('clear-zone').addEventListener('click', clearRiskZone);
+    byId('analyze-upload').addEventListener('click', analyzeUpload);
+    loadRiskZone(); refresh(); setInterval(refresh, 1500);
+  </script>
+</body>
+</html>

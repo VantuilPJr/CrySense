@@ -78,3 +78,23 @@ O Raspberry Pi permanece responsável pela captura de áudio, sensores, interfac
 ## Objetivo
 
 O projeto visa apoiar decisões rápidas, reduzir a ansiedade dos cuidadores e aumentar a percepção de segurança durante a rotina do bebê, sem substituir o cuidado humano.
+
+## Estrutura do repositório
+
+```text
+CrySense/
+├── android/      # Aplicativo Android em Kotlin e Jetpack Compose
+└── raspberry/    # Backend Python, modelos, datasets, testes e implantação
+```
+
+O diretório [`raspberry`](raspberry/) contém o servidor local completo, os serviços de hardware, o servidor de visão para o computador, os modelos treinados e os datasets utilizados no projeto. O diretório [`android`](android/) contém o projeto importável no Android Studio.
+
+## Execução e instalação
+
+As instruções de preparação do Raspberry Pi, treinamento, testes, instalação como serviço, API, servidor YOLO e uso do painel estão em [`raspberry/README.md`](raspberry/README.md).
+
+Para o aplicativo, siga [`android/README.md`](android/README.md). O painel principal se comunica diretamente com o Raspberry Pi e pode ser compilado sem Firebase. A integração legada é ativada somente se o desenvolvedor fornecer seu próprio `android/app/google-services.json`, que não é publicado.
+
+## Dados e privacidade
+
+O processamento principal foi projetado para ocorrer localmente. Credenciais, bancos de eventos, registros de execução, ambientes virtuais e artefatos de compilação não fazem parte do repositório. Antes de usar o sistema com dados reais, revise permissões de rede, retenção de eventos e consentimento para captação de áudio e vídeo.
