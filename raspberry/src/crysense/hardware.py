@@ -38,6 +38,8 @@ class DisplaySnapshot:
     audio_level: float | None = None
     camera_running: bool = False
     accent: tuple[int, int, int] = (25, 125, 155)
+    crying_baby: bool = False
+    animation_frame: int = 0
 
 
 def _interface_ipv4(interface: str) -> str | None:
@@ -234,6 +236,66 @@ class TFT:
             draw.arc((x - radius, y - radius, x + radius, y + radius), 215, 325, fill=color, width=2)
         draw.ellipse((x - 1, y + 4, x + 1, y + 6), fill=color)
 
+    @staticmethod
+    def _draw_crying_baby(draw: Any, box: tuple[int, int, int, int], animation_frame: int = 0) -> None:
+        """Desenha um rosto vetorial para não depender de fontes de emoji."""
+        left, top, right, bottom = box
+        width = right - left
+        height = bottom - top
+        center_x = left + width // 2
+        center_y = top + height // 2
+        frame = animation_frame % 2
+        skin = (255, 218, 181)
+        outline = (104, 73, 67)
+        hair = (113, 79, 60)
+        tear = (55, 157, 219)
+        mouth = (111, 48, 59)
+
+        ear_radius = max(2, width // 11)
+        draw.ellipse(
+            (left - ear_radius + 2, center_y - ear_radius, left + ear_radius + 2, center_y + ear_radius),
+            fill=skin,
+            outline=outline,
+        )
+        draw.ellipse(
+            (right - ear_radius - 2, center_y - ear_radius, right + ear_radius - 2, center_y + ear_radius),
+            fill=skin,
+            outline=outline,
+        )
+        draw.ellipse((left, top, right, bottom), fill=skin, outline=outline, width=2)
+
+        hair_y = top + max(3, height // 7)
+        draw.arc((center_x - 9, top - 2, center_x + 2, hair_y + 7), 185, 345, fill=hair, width=2)
+        draw.arc((center_x - 1, top - 1, center_x + 9, hair_y + 7), 195, 350, fill=hair, width=2)
+
+        eye_y = center_y - max(1, height // 12)
+        eye_offset = max(5, width // 5)
+        draw.line((center_x - eye_offset - 3, eye_y - 1, center_x - eye_offset, eye_y + 1), fill=outline, width=2)
+        draw.line((center_x - eye_offset, eye_y + 1, center_x - eye_offset + 3, eye_y - 1), fill=outline, width=2)
+        draw.line((center_x + eye_offset - 3, eye_y - 1, center_x + eye_offset, eye_y + 1), fill=outline, width=2)
+        draw.line((center_x + eye_offset, eye_y + 1, center_x + eye_offset + 3, eye_y - 1), fill=outline, width=2)
+
+        mouth_width = max(6, width // 5)
+        mouth_top = center_y + max(4, height // 7)
+        draw.ellipse(
+            (center_x - mouth_width // 2, mouth_top, center_x + mouth_width // 2, mouth_top + max(7, height // 4)),
+            fill=mouth,
+            outline=outline,
+        )
+        draw.arc(
+            (center_x - mouth_width // 2 + 1, mouth_top + 2, center_x + mouth_width // 2 - 1, mouth_top + max(6, height // 5)),
+            10,
+            170,
+            fill=(244, 132, 139),
+            width=1,
+        )
+
+        tear_top = eye_y + 3
+        for index, x in enumerate((center_x - eye_offset, center_x + eye_offset)):
+            length = max(5, height // 5) + (2 if (index + frame) % 2 == 0 else 0)
+            draw.line((x, tear_top, x, tear_top + length), fill=tear, width=2)
+            draw.ellipse((x - 2, tear_top + length - 1, x + 2, tear_top + length + 3), fill=tear)
+
     def render_dashboard(self, snapshot: DisplaySnapshot, image_size: tuple[int, int] | None = None) -> Any:
         from PIL import Image, ImageDraw
 
@@ -268,15 +330,26 @@ class TFT:
         detail = self._fit_text(draw, snapshot.detail, small_font, width - 67)
         draw.text((13, 42), detail, fill=muted, font=small_font)
 
-        level = max(0.0, min(float(snapshot.audio_level or 0.0), 0.10))
-        meter = level / 0.10
-        meter_x, meter_y, meter_width = width - 52, 43, 42
-        draw.text((meter_x, 27), f"MIC {level:.0%}", fill=muted, font=tiny_font)
-        draw.rounded_rectangle((meter_x, meter_y, meter_x + meter_width, meter_y + 6), radius=3, fill=(225, 237, 241))
-        if meter > 0:
-            fill_width = max(3, round(meter_width * meter))
-            meter_color = good if meter < 0.75 else warning
-            draw.rounded_rectangle((meter_x, meter_y, meter_x + fill_width, meter_y + 6), radius=3, fill=meter_color)
+        if snapshot.crying_baby:
+            self._draw_crying_baby(
+                draw,
+                (width - 49, 25, width - 13, 58),
+                animation_frame=snapshot.animation_frame,
+            )
+        else:
+            level = max(0.0, min(float(snapshot.audio_level or 0.0), 0.10))
+            meter = level / 0.10
+            meter_x, meter_y, meter_width = width - 52, 43, 42
+            draw.text((meter_x, 27), f"MIC {level:.0%}", fill=muted, font=tiny_font)
+            draw.rounded_rectangle(
+                (meter_x, meter_y, meter_x + meter_width, meter_y + 6), radius=3, fill=(225, 237, 241)
+            )
+            if meter > 0:
+                fill_width = max(3, round(meter_width * meter))
+                meter_color = good if meter < 0.75 else warning
+                draw.rounded_rectangle(
+                    (meter_x, meter_y, meter_x + fill_width, meter_y + 6), radius=3, fill=meter_color
+                )
 
         sensor_y, sensor_bottom = 64, 101
         gap = 3
@@ -317,6 +390,9 @@ class TFT:
         detail: str,
         color: tuple[int, int, int],
         image_size: tuple[int, int] | None = None,
+        *,
+        crying_baby: bool = False,
+        animation_frame: int = 0,
     ) -> Any:
         from PIL import Image, ImageDraw
 
@@ -331,10 +407,17 @@ class TFT:
         draw.text((7, 3), "CrySense", fill="white", font=header_font)
         draw.text((width - 46, 5), "ALERTA", fill="white", font=small_font)
         draw.rounded_rectangle((7, 29, width - 8, height - 10), radius=10, fill="white", outline=color, width=2)
-        fitted_title = self._fit_text(draw, title.upper(), title_font, width - 28)
+        text_width = width - 84 if crying_baby else width - 28
+        fitted_title = self._fit_text(draw, title.upper(), title_font, text_width)
         draw.text((14, 37), fitted_title, fill=color, font=title_font)
-        lines = self._wrapped_lines(draw, detail, detail_font, width - 28, max_lines=3)
+        lines = self._wrapped_lines(draw, detail, detail_font, text_width, max_lines=3)
         draw.multiline_text((14, 66), "\n".join(lines), fill=(45, 65, 75), font=detail_font, spacing=3)
+        if crying_baby:
+            self._draw_crying_baby(
+                draw,
+                (width - 58, 34, width - 15, 77),
+                animation_frame=animation_frame,
+            )
         draw.text((14, height - 25), "VERIFIQUE O BEBE", fill=color, font=small_font)
         return image
 
@@ -354,12 +437,27 @@ class TFT:
         image = self.render_dashboard(snapshot)
         self._present(image, ("dashboard", snapshot))
 
-    def show(self, title: str, detail: str, color: tuple[int, int, int] = (30, 90, 180)) -> None:
+    def show(
+        self,
+        title: str,
+        detail: str,
+        color: tuple[int, int, int] = (30, 90, 180),
+        *,
+        crying_baby: bool = False,
+        animation_frame: int = 0,
+    ) -> None:
         if self.display is None:
             return
         try:
-            image = self.render_alert(title, detail, color)
-            self._present(image, ("alert", title, detail, color))
+            frame = animation_frame % 2 if crying_baby else 0
+            image = self.render_alert(
+                title,
+                detail,
+                color,
+                crying_baby=crying_baby,
+                animation_frame=frame,
+            )
+            self._present(image, ("alert", title, detail, color, crying_baby, frame))
         except Exception as exc:
             self.error = str(exc)
 

@@ -79,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sensor = BME280(settings.enable_sensor)
         vision = VisionState(settings.vision_status_timeout)
         app.state.display_event_until = 0.0
+        app.state.display_alert = None
 
         sensor_cache_lock = Lock()
         sensor_cache = sensor.read()
@@ -105,15 +106,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     network_cache_at = now
                 return network_cache
 
+        def set_display_alert(
+            title: str,
+            detail: str,
+            color: tuple[int, int, int],
+            *,
+            crying_baby: bool = False,
+        ) -> None:
+            app.state.display_event_until = monotonic() + 15
+            app.state.display_alert = (title, detail, color, crying_baby)
+            tft.show(title, detail, color, crying_baby=crying_baby, animation_frame=0)
+
         def handle_event(event: CryEvent) -> None:
             storage.add_event(event)
-            app.state.display_event_until = monotonic() + 15
             if event.label == "colic":
                 speaker.play(60)
-                tft.show("CÓLICA", f"{event.confidence:.0%}\nRuído ativo", (150, 50, 60))
+                set_display_alert(
+                    "CÓLICA",
+                    f"{event.confidence:.0%}\nRuído ativo",
+                    (150, 50, 60),
+                    crying_baby=True,
+                )
             else:
                 speaker.stop()
-                tft.show("FOME", f"{event.confidence:.0%}\nPrecisa mamar", (160, 110, 35))
+                set_display_alert(
+                    "FOME",
+                    f"{event.confidence:.0%}\nPrecisa mamar",
+                    (160, 110, 35),
+                    crying_baby=True,
+                )
 
         pipeline = TwoStagePipeline(
             trigger,
@@ -124,9 +145,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             on_event=handle_event,
         )
         def update_monitor_display() -> None:
-            if monotonic() < app.state.display_event_until:
+            now = monotonic()
+            if now < app.state.display_event_until:
+                alert = app.state.display_alert
+                if alert is not None:
+                    title, detail, color, crying_baby = alert
+                    tft.show(
+                        title,
+                        detail,
+                        color,
+                        crying_baby=crying_baby,
+                        animation_frame=int(now) % 2,
+                    )
                 return
+            app.state.display_alert = None
             accent = (25, 125, 155)
+            crying_baby = False
             if not audio.listening:
                 status = "MICROFONE INATIVO"
                 detail = audio.error or ("Inicializando captura" if audio.running else "Aguardando microfone")
@@ -139,10 +173,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status = "ANALISANDO CHORO"
                 detail = "Identificando fome ou colica"
                 accent = (221, 133, 42)
-            elif pipeline.last_trigger and pipeline.last_trigger.label == "cry":
+                crying_baby = True
+            elif (
+                pipeline.last_trigger
+                and pipeline.last_trigger.label == "cry"
+                and pipeline.last_trigger.confidence >= settings.trigger_threshold
+            ):
                 status = "CHORO DETECTADO"
                 detail = f"IA 1 {pipeline.last_trigger.confidence:.0%} - confirmando"
                 accent = (221, 133, 42)
+                crying_baby = True
             else:
                 status = "MONITORANDO"
                 detail = "IA pronta e escutando"
@@ -155,6 +195,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     audio_level=audio.level_rms,
                     camera_running=camera.running,
                     accent=accent,
+                    crying_baby=crying_baby,
+                    animation_frame=int(now) % 2,
                 )
             )
 
@@ -201,6 +243,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.speaker = speaker
         app.state.vision = vision
         app.state.handle_event = handle_event
+        app.state.set_display_alert = set_display_alert
         try:
             yield
         finally:
@@ -340,8 +383,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         if new_alert:
             app.state.storage.add_vision_event(timestamp, report.label or "risco_visual", report.confidence, report.detail)
-            app.state.display_event_until = monotonic() + 15
-            app.state.tft.show("RISCO VISUAL", (report.detail or report.label or "Verifique o berço")[:45], (180, 55, 45))
+            app.state.set_display_alert(
+                "RISCO VISUAL",
+                (report.detail or report.label or "Verifique o berço")[:45],
+                (180, 55, 45),
+            )
         return {"ok": True, "vision": app.state.vision.snapshot()}
 
     @app.get("/api/camera/stream")

@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+from PIL import ImageChops
+
 from crysense.hardware import (
     TFT,
     DisplaySnapshot,
@@ -96,6 +98,44 @@ def test_alert_has_priority_layout_and_supports_long_text() -> None:
 
     assert image.size == (160, 128)
     assert image.getpixel((2, 2)) == (190, 67, 72)
+
+
+def test_crying_baby_changes_tears_between_dashboard_frames() -> None:
+    tft = TFT(False)
+    snapshot = replace(dashboard_snapshot(), crying_baby=True, animation_frame=0)
+    first = tft.render_dashboard(snapshot, (160, 128))
+    second = tft.render_dashboard(replace(snapshot, animation_frame=1), (160, 128))
+
+    difference = ImageChops.difference(first, second)
+    icon_box = (109, 23, 150, 62)
+    assert difference.crop(icon_box).getbbox() is not None
+
+    outside_icon = difference.copy()
+    outside_icon.paste((0, 0, 0), icon_box)
+    assert outside_icon.getbbox() is None
+
+    colors = {color: count for count, color in first.crop(icon_box).getcolors(maxcolors=4096)}
+    assert colors[(255, 218, 181)] > 20
+    assert colors[(55, 157, 219)] > 4
+
+
+def test_crying_baby_is_animated_and_deduplicated_in_alert() -> None:
+    tft = TFT(False)
+    fake = FakeDisplay()
+    tft.display = fake
+
+    tft.show("FOME", "Precisa mamar", (160, 110, 35), crying_baby=True, animation_frame=0)
+    tft.show("FOME", "Precisa mamar", (160, 110, 35), crying_baby=True, animation_frame=0)
+    tft.show("FOME", "Precisa mamar", (160, 110, 35), crying_baby=True, animation_frame=1)
+
+    assert len(fake.images) == 2
+    difference = ImageChops.difference(fake.images[0], fake.images[1])
+    icon_box = (100, 32, 148, 80)
+    assert difference.crop(icon_box).getbbox() is not None
+
+    outside_icon = difference.copy()
+    outside_icon.paste((0, 0, 0), icon_box)
+    assert outside_icon.getbbox() is None
 
 
 def test_network_status_identifies_fallback_access_point(monkeypatch) -> None:
