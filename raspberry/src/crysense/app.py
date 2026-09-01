@@ -74,7 +74,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         type_classifier = AudioClassifier(settings.type_model_path, ("colic", "hunger"), seconds=6.0)
         trigger.load()
         type_classifier.load()
-        speaker = PinkNoisePlayer(settings.audio_output_device, settings.audio_output_channels)
+        speaker = PinkNoisePlayer(
+            settings.audio_output_device,
+            settings.audio_output_channels,
+            settings.pink_noise_volume,
+        )
         tft = TFT(settings.enable_tft)
         sensor = BME280(settings.enable_sensor)
         vision = VisionState(settings.vision_status_timeout)
@@ -318,6 +322,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "trigger_threshold": settings.trigger_threshold,
             "type_threshold": settings.type_threshold,
             "type_margin": settings.type_margin,
+            "pink_noise_volume": settings.pink_noise_volume,
             "camera": {
                 "width": settings.camera_width,
                 "height": settings.camera_height,

@@ -55,6 +55,7 @@ class Settings:
     trigger_threshold: float
     type_threshold: float
     type_margin: float
+    pink_noise_volume: float = 0.10
     vision_token: str = ""
     vision_status_timeout: float = 8.0
 
@@ -90,6 +91,7 @@ class Settings:
             trigger_threshold=_float("CRYSENSE_TRIGGER_THRESHOLD", 0.80),
             type_threshold=_float("CRYSENSE_TYPE_THRESHOLD", 0.68),
             type_margin=_float("CRYSENSE_TYPE_MARGIN", 0.20),
+            pink_noise_volume=_float("CRYSENSE_PINK_NOISE_VOLUME", 0.10),
             vision_token=os.getenv("CRYSENSE_VISION_TOKEN", "").strip(),
             vision_status_timeout=_float("CRYSENSE_VISION_STATUS_TIMEOUT", 8.0),
         )

@@ -74,6 +74,19 @@ def test_relative_env_paths_are_inside_project_home(tmp_path: Path, monkeypatch)
     assert settings.type_model_path == tmp_path / "models" / "type.joblib"
 
 
+def test_pink_noise_volume_is_configurable_and_bounded(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CRYSENSE_HOME", str(tmp_path))
+    monkeypatch.setenv("CRYSENSE_PINK_NOISE_VOLUME", "0.20")
+    settings = Settings.from_env()
+    assert settings.pink_noise_volume == 0.20
+
+    from crysense.audio_runtime import PinkNoisePlayer
+
+    assert PinkNoisePlayer(volume=settings.pink_noise_volume).volume == 0.20
+    assert PinkNoisePlayer(volume=-1).volume == 0
+    assert PinkNoisePlayer(volume=2).volume == 1
+
+
 def test_uploaded_wav_uses_both_audio_models_and_vision_reports(tmp_path: Path) -> None:
     settings = Settings(
         home=tmp_path,

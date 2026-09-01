@@ -68,6 +68,12 @@ set_env CRYSENSE_AUDIO_OUTPUT_DEVICE snd_rpi_hifiberry_dac8x
 set_env CRYSENSE_AUDIO_INPUT_CHANNELS 2
 set_env CRYSENSE_AUDIO_INPUT_CHANNEL 0
 set_env CRYSENSE_AUDIO_OUTPUT_CHANNELS 2
+# Migra o padrão anterior, que ainda causou subtensão no conjunto validado.
+if grep -qx 'CRYSENSE_PINK_NOISE_VOLUME=0.25' /etc/crysense.env; then
+  set_env CRYSENSE_PINK_NOISE_VOLUME 0.10
+elif ! grep -q '^CRYSENSE_PINK_NOISE_VOLUME=' /etc/crysense.env; then
+  set_env CRYSENSE_PINK_NOISE_VOLUME 0.10
+fi
 
 # Migra apenas o limiar antigo padrão; configurações personalizadas são preservadas.
 if grep -qx 'CRYSENSE_TYPE_THRESHOLD=0.75' /etc/crysense.env; then

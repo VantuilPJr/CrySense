@@ -211,6 +211,9 @@ CRYSENSE_AUDIO_OUTPUT_DEVICE=snd_rpi_hifiberry_dac8x
 CRYSENSE_AUDIO_INPUT_CHANNELS=2
 CRYSENSE_AUDIO_INPUT_CHANNEL=0
 CRYSENSE_AUDIO_OUTPUT_CHANNELS=2
+CRYSENSE_PINK_NOISE_VOLUME=0.10
 ```
 
 O INMP441 está ligado ao canal esquerdo pelo pino L/R aterrado; por isso a aplicação seleciona o canal `0`. O pipeline recebe a taxa nativa do hardware e reamostra internamente para 16 kHz antes de executar os dois modelos. Não carregue também `dtoverlay=i2s-dac`: o Pi 3B possui apenas uma controladora I2S e o overlay full-duplex já atende entrada e saída.
+
+O volume do ruído rosa fica limitado por software a um intervalo de `0` a `1`; o padrão `0.10` reduz o pico de consumo do MAX98357A. Ainda assim, use fonte e cabo capazes de alimentar Raspberry, webcam, TFT e amplificador. `vcgencmd get_throttled` deve retornar `0x0`; bits persistentes de subtensão indicam que a alimentação precisa ser corrigida.
