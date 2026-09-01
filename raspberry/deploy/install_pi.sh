@@ -14,7 +14,7 @@ fi
 apt-get update
 apt-get install -y python3-venv python3-dev build-essential rsync \
   libportaudio2 portaudio19-dev libsndfile1 libopenblas-dev libjpeg-dev \
-  i2c-tools spi-tools v4l-utils device-tree-compiler
+  i2c-tools spi-tools v4l-utils device-tree-compiler fonts-dejavu-core
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" "$TARGET_DIR"
 rsync -a --delete --exclude '.venv' --exclude 'data' --exclude 'datasetIA1' --exclude 'datasetIA2' \

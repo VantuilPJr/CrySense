@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import compare_digest
+from threading import Event, Lock, Thread
 from time import monotonic
 from typing import Literal
 
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from .audio_runtime import AudioRuntime, PinkNoisePlayer
 from .camera import CameraService
-from .hardware import BME280, TFT, reading_dict
+from .hardware import BME280, TFT, DisplaySnapshot, read_network_status, reading_dict
 from .models import AudioClassifier
 from .pipeline import CryEvent, TwoStagePipeline
 from .settings import Settings
@@ -79,6 +80,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         vision = VisionState(settings.vision_status_timeout)
         app.state.display_event_until = 0.0
 
+        sensor_cache_lock = Lock()
+        sensor_cache = sensor.read()
+        sensor_cache_at = monotonic()
+        network_cache_lock = Lock()
+        network_cache = read_network_status()
+        network_cache_at = monotonic()
+
+        def latest_sensor_reading():
+            nonlocal sensor_cache, sensor_cache_at
+            now = monotonic()
+            with sensor_cache_lock:
+                if now - sensor_cache_at >= 5:
+                    sensor_cache = sensor.read()
+                    sensor_cache_at = now
+                return sensor_cache
+
+        def latest_network_reading():
+            nonlocal network_cache, network_cache_at
+            now = monotonic()
+            with network_cache_lock:
+                if now - network_cache_at >= 5:
+                    network_cache = read_network_status()
+                    network_cache_at = now
+                return network_cache
+
         def handle_event(event: CryEvent) -> None:
             storage.add_event(event)
             app.state.display_event_until = monotonic() + 15
@@ -100,24 +126,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         def update_monitor_display() -> None:
             if monotonic() < app.state.display_event_until:
                 return
+            accent = (25, 125, 155)
             if not audio.listening:
-                detail = audio.error or "Aguardando microfone"
-                tft.show("AUDIO", detail[:45], (130, 75, 35))
-                return
-            signal = f"Sinal {audio.level_rms or 0:.1%}"
-            if pipeline.phase == "capturing_type_audio":
-                tft.show("CHORO?", f"Analisando tipo\n{signal}", (120, 70, 40))
+                status = "MICROFONE INATIVO"
+                detail = audio.error or ("Inicializando captura" if audio.running else "Aguardando microfone")
+                accent = (215, 137, 42)
+            elif pipeline.phase == "error":
+                status = "ERRO NA IA"
+                detail = pipeline.last_error or "Falha ao analisar o audio"
+                accent = (190, 67, 72)
+            elif pipeline.phase == "capturing_type_audio":
+                status = "ANALISANDO CHORO"
+                detail = "Identificando fome ou colica"
+                accent = (221, 133, 42)
             elif pipeline.last_trigger and pipeline.last_trigger.label == "cry":
-                tft.show("CHORO?", f"IA1 {pipeline.last_trigger.confidence:.0%}\nConfirmando", (120, 70, 40))
+                status = "CHORO DETECTADO"
+                detail = f"IA 1 {pipeline.last_trigger.confidence:.0%} - confirmando"
+                accent = (221, 133, 42)
             else:
-                tft.show("OUVINDO", f"{signal}\nIA pronta", (30, 90, 180))
+                status = "MONITORANDO"
+                detail = "IA pronta e escutando"
+            tft.show_dashboard(
+                DisplaySnapshot(
+                    status=status,
+                    detail=detail,
+                    network=latest_network_reading(),
+                    sensor=latest_sensor_reading(),
+                    audio_level=audio.level_rms,
+                    camera_running=camera.running,
+                    accent=accent,
+                )
+            )
 
         audio = AudioRuntime(
             pipeline,
             input_device=settings.audio_input_device,
             input_channels=settings.audio_input_channels,
             input_channel=settings.audio_input_channel,
-            on_frame=update_monitor_display,
         )
         camera = CameraService(
             settings.camera_index,
@@ -131,7 +176,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             camera.start()
         if settings.enable_audio and trigger.ready and type_classifier.ready:
             audio.start()
-        update_monitor_display()
+
+        display_stop = Event()
+        display_thread: Thread | None = None
+
+        def display_loop() -> None:
+            while not display_stop.wait(1):
+                update_monitor_display()
+
+        if tft.ready:
+            update_monitor_display()
+            display_thread = Thread(target=display_loop, name="crysense-display", daemon=True)
+            display_thread.start()
 
         app.state.settings = settings
         app.state.storage = storage
@@ -139,6 +195,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.audio = audio
         app.state.camera = camera
         app.state.sensor = sensor
+        app.state.latest_sensor_reading = latest_sensor_reading
+        app.state.latest_network_reading = latest_network_reading
         app.state.tft = tft
         app.state.speaker = speaker
         app.state.vision = vision
@@ -146,6 +204,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            display_stop.set()
+            if display_thread:
+                display_thread.join(timeout=2)
             audio.stop()
             speaker.stop()
             camera.stop()
@@ -160,7 +221,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/status")
     def status() -> dict:
-        sensor_reading = app.state.sensor.read()
+        sensor_reading = app.state.latest_sensor_reading()
+        network_reading = app.state.latest_network_reading()
         if sensor_reading.error is None:
             app.state.storage.add_sensor_sample(
                 sensor_reading.timestamp, sensor_reading.temperature, sensor_reading.humidity, sensor_reading.pressure
@@ -181,6 +243,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "camera": asdict(app.state.camera.status()),
             "vision": app.state.vision.snapshot(),
             "sensor": reading_dict(sensor_reading),
+            "network": asdict(network_reading),
             "tft_error": app.state.tft.error,
         }
 

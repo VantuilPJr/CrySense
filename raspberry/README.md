@@ -27,6 +27,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 - Detecção de pessoas com YOLO e exibição de *bounding boxes*.
 - Zona visual de risco desenhada pelo usuário sobre o vídeo.
 - Alertas locais no aplicativo, painel web e tela TFT.
+- Painel TFT atualizado em tempo real com Wi-Fi, IP, microfone, câmera e dados ambientais.
 - Monitoramento de temperatura, umidade e pressão atmosférica.
 - Registro local do histórico de ocorrências em SQLite.
 - Intervenção sonora configurável em eventos associados à cólica.
@@ -56,6 +57,18 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 O vídeo é transmitido localmente por MJPEG. O Raspberry não executa a visão computacional, portanto áudio, sensores e transmissão permanecem leves mesmo quando a análise visual está ativa no computador.
 
 Se a webcam estiver montada em outra orientação, ajuste `CRYSENSE_CAMERA_ROTATION` em `/etc/crysense.env` e reinicie o serviço. O valor é em graus no sentido horário: `90`, `180` ou `270`; para girar 90° para a esquerda use `270`. Valores como `265` permitem corrigir uma pequena inclinação física.
+
+## Painel local da TFT
+
+A tela ST7735 usa a orientação horizontal de 160×128 pixels e funciona independentemente do painel web. Ela é atualizada em segundo plano mesmo quando nenhum celular está conectado e apresenta:
+
+- situação do Wi-Fi, nome da rede e endereço IP;
+- temperatura, umidade e pressão lidas pelo BME280;
+- estado do microfone e barra dinâmica do nível de áudio;
+- fase atual das IAs e estado da câmera;
+- tela prioritária por 15 segundos para alertas de fome, cólica ou risco visual.
+
+Quando o ponto de acesso de emergência estiver ativo, a TFT mostra **REDE CRYSENSE** e o IP `10.42.0.1`, facilitando a conexão durante apresentações e feiras.
 
 ## Pinagem definida
 

@@ -30,7 +30,7 @@ vision = [
   "opencv-python>=4.10,<5",
   "ultralytics>=8.3,<9",
 ]
-dev = ["pytest>=8,<9", "ruff>=0.8,<1", "httpx2>=2,<3"]
+dev = ["pytest>=8,<9", "ruff>=0.8,<1", "httpx2>=2,<3", "pillow>=10,<12"]
 
 [project.scripts]
 crysense = "crysense.app:main"
