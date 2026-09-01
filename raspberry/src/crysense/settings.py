@@ -88,7 +88,7 @@ class Settings:
             camera_fps=_int("CRYSENSE_CAMERA_FPS", 15),
             camera_rotation=_float("CRYSENSE_CAMERA_ROTATION", 0),
             trigger_threshold=_float("CRYSENSE_TRIGGER_THRESHOLD", 0.80),
-            type_threshold=_float("CRYSENSE_TYPE_THRESHOLD", 0.75),
+            type_threshold=_float("CRYSENSE_TYPE_THRESHOLD", 0.68),
             type_margin=_float("CRYSENSE_TYPE_MARGIN", 0.20),
             vision_token=os.getenv("CRYSENSE_VISION_TOKEN", "").strip(),
             vision_status_timeout=_float("CRYSENSE_VISION_STATUS_TIMEOUT", 8.0),

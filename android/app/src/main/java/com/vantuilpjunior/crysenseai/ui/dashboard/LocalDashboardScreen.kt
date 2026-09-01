@@ -220,9 +220,14 @@ private fun AudioUploadCard(
             when {
                 error != null -> Text(error, color = AlertRed, style = MaterialTheme.typography.bodySmall)
                 result != null -> {
-                    val trigger = "IA 1: ${labelFor(result.trigger.label)} ${(result.trigger.confidence * 100).toInt()}%"
+                    val confirmation = result.triggerConfirmation
+                    val trigger = if (confirmation.confirmed) {
+                        "IA 1: choro confirmado (${confirmation.positiveWindows}/${confirmation.windowSize}; pico ${(result.trigger.confidence * 100).toInt()}%)"
+                    } else {
+                        "IA 1: não confirmou (${confirmation.positiveWindows}/${confirmation.requiredWindows}; pico ${(result.trigger.confidence * 100).toInt()}%)"
+                    }
                     val type = result.classification?.let { " · IA 2: ${labelFor(it.label)} ${(it.confidence * 100).toInt()}%" }.orEmpty()
-                    Text(trigger + type, color = if (result.classification != null) HealthyGreen else WarningAmber, fontWeight = FontWeight.SemiBold)
+                    Text(trigger + type, color = if (result.alertTriggered) HealthyGreen else WarningAmber, fontWeight = FontWeight.SemiBold)
                     Text(result.message, color = SoftText, style = MaterialTheme.typography.bodySmall)
                 }
             }

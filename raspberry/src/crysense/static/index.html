@@ -311,10 +311,13 @@
         const response = await fetch('/api/audio/analyze', { method: 'POST', body: form });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Falha ao analisar o áudio.');
-        const trigger = `IA 1: ${human(data.trigger.label)} ${Math.round(data.trigger.confidence * 100)}%`;
+        const confirmation = data.trigger_confirmation;
+        const trigger = confirmation && confirmation.confirmed
+          ? `IA 1: choro confirmado (${confirmation.positive_windows}/${confirmation.window_size} janelas; pico ${Math.round((data.trigger.scores.cry || 0) * 100)}%)`
+          : `IA 1: não confirmou (${confirmation ? confirmation.positive_windows : 0}/${confirmation ? confirmation.required_windows : 3} janelas; pico ${Math.round((data.trigger.scores.cry || 0) * 100)}%)`;
         const type = data.classification ? ` · IA 2: ${human(data.classification.label)} ${Math.round(data.classification.confidence * 100)}%` : '';
         result.textContent = `${trigger}${type}. ${data.message}`;
-        result.className = data.classification ? 'good' : 'warning';
+        result.className = data.alert_triggered ? 'good' : 'warning';
       } catch (error) {
         result.textContent = error.message || 'Não foi possível analisar o arquivo.';
         result.className = 'bad';

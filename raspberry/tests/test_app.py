@@ -18,7 +18,7 @@ class ProbabilityModel:
         return self.probabilities
 
 
-def wav_payload(seconds: float = 1.0, sample_rate: int = 16_000) -> bytes:
+def wav_payload(seconds: float = 6.0, sample_rate: int = 16_000) -> bytes:
     samples = (np.sin(np.linspace(0, 160, int(seconds * sample_rate))) * 4_000).astype("<i2")
     output = BytesIO()
     with wave.open(output, "wb") as audio:

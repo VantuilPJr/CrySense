@@ -89,7 +89,7 @@ fun DashboardScreen(state: MonitorState, historyManager: HistoryManager? = null)
             }
 
             // --- Suporte Inteligente (App Guide) ---
-            if (isAlert && state.status.confianca >= 75) {
+            if (isAlert) {
                 if (tipo == "COLICA") {
                     ColicGuidelinesCard()
                 } else if (tipo == "FOME") {

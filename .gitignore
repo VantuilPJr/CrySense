@@ -20,7 +20,7 @@
 **/*.db
 **/*.db-shm
 **/*.db-wal
-**/data/
+/raspberry/data/
 
 # Modelos baixados automaticamente
 **/yolo*.pt

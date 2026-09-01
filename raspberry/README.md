@@ -6,7 +6,7 @@
 
 O **CrySense AI** foi desenvolvido para oferecer mais tranquilidade e segurança aos cuidadores, especialmente a pais de primeira viagem. Diferentemente de uma babá eletrônica convencional, que apenas transmite áudio e vídeo, o sistema utiliza inteligência artificial para identificar o choro do bebê e classificar seu padrão como mais associado à **fome** ou à **cólica**.
 
-O áudio capturado é convertido em uma representação bidimensional na escala **Mel**. A partir desse espectrograma, os modelos extraem características acústicas e comparam o padrão observado com os exemplos utilizados no treinamento. A análise acontece em duas etapas: primeiro o sistema diferencia `choro` de `ruído`; depois, quando o choro é confirmado, classifica-o como `fome` ou `cólica`.
+O áudio capturado é padronizado em 16 kHz e convertido em descritores temporais e espectrais, como energia, cruzamento por zero, centroide, largura de banda e fluxo espectral. Os modelos comparam esse conjunto de características com os exemplos utilizados no treinamento. A análise acontece em duas etapas: primeiro o sistema diferencia `choro` de `ruído`; depois, quando o choro é confirmado, classifica-o como `fome` ou `cólica`.
 
 O monitoramento também reúne vídeo ao vivo, condições ambientais e visão computacional. O Raspberry Pi transmite as imagens localmente, enquanto um computador pode executar **OpenCV + YOLO** para localizar pessoas por meio de *bounding boxes* e verificar a entrada em uma zona de risco desenhada pelo próprio usuário sobre o berço. Os resultados, alertas e ocorrências são apresentados no painel web, na tela TFT e no aplicativo Android.
 
@@ -21,7 +21,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 - Monitoramento contínuo do áudio e do ambiente.
 - Detecção de `choro` × `ruído` por uma primeira IA.
 - Classificação do choro como `fome` × `cólica` por uma segunda IA.
-- Conversão do áudio em espectrogramas na escala Mel.
+- Padronização do áudio e extração local de características temporais e espectrais.
 - Análise manual de arquivos WAV para demonstrações em locais barulhentos.
 - Vídeo ao vivo no painel web e no aplicativo Android.
 - Detecção de pessoas com YOLO e exibição de *bounding boxes*.
@@ -38,7 +38,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 - **Computação embarcada:** Raspberry Pi 3B com Raspberry Pi OS Lite.
 - **Backend local:** Python, FastAPI, API REST e SQLite.
 - **Aprendizado de máquina:** scikit-learn, Random Forest e modelos serializados com Joblib.
-- **Processamento de áudio:** NumPy, análise espectral e escala Mel.
+- **Processamento de áudio:** NumPy, reamostragem, análise temporal e espectral.
 - **Visão computacional:** OpenCV e Ultralytics YOLO executados no computador.
 - **Aplicativo móvel:** Kotlin e Jetpack Compose para Android.
 - **Transmissão:** vídeo MJPEG e comunicação HTTP pela rede Wi-Fi local.
@@ -50,7 +50,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 ## Arquitetura técnica
 
 1. **IA 1 — trigger:** `cry` × `noise`, Random Forest sobre uma janela de áudio de 1 segundo.
-2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos, executado somente após o trigger confirmar 3 de 5 janelas.
+2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos que preserva as janelas responsáveis pelo gatilho, executado após a confirmação de choro em 3 de 5 janelas.
 3. **Aplicação:** FastAPI local, SQLite, BME280, TFT ST7735 e webcam USB. O dashboard móvel é servido na própria rede Wi-Fi.
 4. **Visão opcional no computador:** o Raspberry só entrega o MJPEG. Um processo Python no computador executa OpenCV + YOLO, confirma padrões de risco e devolve o alerta pela rede local.
 
@@ -98,7 +98,7 @@ Abra `http://127.0.0.1:8080`. Por padrão, webcam, áudio, BME280 e TFT ficam de
 
 ## Demonstração em feira: análise de áudio enviado
 
-O dashboard possui a seção **Analisar áudio para demonstração**. Se o ruído da feira tornar o microfone inadequado, envie um arquivo **WAV PCM** de até 12 MB: a IA 1 verifica `choro` × `ruído`; quando confirma choro acima do limiar, a IA 2 classifica `cólica` × `fome`.
+O dashboard possui a seção **Analisar áudio para demonstração**. Se o ruído da feira tornar o microfone inadequado, envie um arquivo **WAV PCM** de até 12 MB. A IA 1 percorre todo o arquivo em janelas de um segundo e exige três confirmações nas cinco janelas recentes. Em seguida, a IA 2 analisa uma janela de seis segundos que contém o trecho confirmado e classifica `cólica` × `fome`.
 
 Essa análise é manual, mas uma confirmação válida de cólica ou fome passa pelo mesmo fluxo de alerta do microfone: cria ocorrência, atualiza o app, mostra a mensagem na TFT e executa a ação configurada para cada tipo. Para a demonstração, mantenha alguns WAVs curtos já preparados no computador.
 

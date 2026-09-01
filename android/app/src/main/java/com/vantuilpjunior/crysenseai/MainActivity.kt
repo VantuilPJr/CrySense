@@ -23,11 +23,17 @@ import com.vantuilpjunior.crysenseai.data.remote.local.RaspberryEndpointStore
 import com.vantuilpjunior.crysenseai.data.remote.local.RaspberryMonitorState
 import com.vantuilpjunior.crysenseai.data.remote.local.RaspberryPiRepository
 import com.vantuilpjunior.crysenseai.data.remote.local.AudioAnalysisDto
+import com.vantuilpjunior.crysenseai.data.remote.local.CryEventDto
 import com.vantuilpjunior.crysenseai.ui.dashboard.LocalDashboardScreen
 import com.vantuilpjunior.crysenseai.ui.theme.CrySenseAITheme
 import com.vantuilpjunior.crysenseai.utils.NotificationHelper
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+
+internal fun shouldNotifyCryEvent(latestEvent: CryEventDto?, lastAlertKey: String): Boolean =
+    latestEvent != null &&
+        latestEvent.label in setOf("colic", "hunger") &&
+        latestEvent.timestamp != lastAlertKey
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,15 +100,11 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(monitorState.events.firstOrNull()?.timestamp) {
                     val latestEvent = monitorState.events.firstOrNull()
                     val confidence = ((latestEvent?.confidence ?: 0.0) * 100).toInt()
-                    if (
-                        latestEvent != null &&
-                        latestEvent.label in setOf("colic", "hunger") &&
-                        latestEvent.timestamp != lastAlertKey &&
-                        confidence >= 75
-                    ) {
-                        lastAlertKey = latestEvent.timestamp
+                    if (shouldNotifyCryEvent(latestEvent, lastAlertKey)) {
+                        val confirmedEvent = requireNotNull(latestEvent)
+                        lastAlertKey = confirmedEvent.timestamp
                         val event = CryEvent(
-                            tipo = latestEvent.label.uppercase(),
+                            tipo = confirmedEvent.label.uppercase(),
                             confianca = confidence,
                             timestampMs = System.currentTimeMillis(),
                         )

@@ -69,6 +69,11 @@ set_env CRYSENSE_AUDIO_INPUT_CHANNELS 2
 set_env CRYSENSE_AUDIO_INPUT_CHANNEL 0
 set_env CRYSENSE_AUDIO_OUTPUT_CHANNELS 2
 
+# Migra apenas o limiar antigo padrão; configurações personalizadas são preservadas.
+if grep -qx 'CRYSENSE_TYPE_THRESHOLD=0.75' /etc/crysense.env; then
+  set_env CRYSENSE_TYPE_THRESHOLD 0.68
+fi
+
 install -m 644 "$TARGET_DIR/deploy/crysense.service" /etc/systemd/system/crysense.service
 systemctl daemon-reload
 systemctl enable crysense.service
