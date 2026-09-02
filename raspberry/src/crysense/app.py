@@ -347,9 +347,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             result, event = analyze_uploaded_wav(
                 payload,
                 filename if filename.lower().endswith(".wav") else "audio.wav",
-                app.state.pipeline.trigger,
                 app.state.pipeline.type_classifier,
-                app.state.settings.trigger_threshold,
                 app.state.settings.type_threshold,
                 app.state.settings.type_margin,
             )

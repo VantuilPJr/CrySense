@@ -108,6 +108,8 @@ data class AudioAnalysisDto(
     val filename: String = "",
     @SerializedName("duration_seconds") val durationSeconds: Double = 0.0,
     @SerializedName("sample_rate") val sampleRate: Int = 0,
+    @SerializedName("analysis_mode") val analysisMode: String = "",
+    @SerializedName("ia1_bypassed") val ia1Bypassed: Boolean = false,
     val trigger: PredictionDto = PredictionDto(),
     @SerializedName("trigger_confirmation")
     val triggerConfirmation: TriggerConfirmationDto = TriggerConfirmationDto(),

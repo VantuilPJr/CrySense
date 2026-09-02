@@ -210,7 +210,7 @@ private fun AudioUploadCard(
         ) {
             Text("Analisar áudio", color = PastelBlueDark, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Para a demonstração em ambiente barulhento, envie um WAV PCM. Uma confirmação de cólica ou fome gera o mesmo alerta do monitoramento ao vivo.",
+                "Envie um WAV PCM que você já sabe conter choro, de preferência com cerca de 6 segundos. O arquivo segue direto para a IA 2.",
                 color = SoftText,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -221,13 +221,20 @@ private fun AudioUploadCard(
                 error != null -> Text(error, color = AlertRed, style = MaterialTheme.typography.bodySmall)
                 result != null -> {
                     val confirmation = result.triggerConfirmation
-                    val trigger = if (confirmation.confirmed) {
+                    val legacyTrigger = if (confirmation.confirmed) {
                         "IA 1: choro confirmado (${confirmation.positiveWindows}/${confirmation.windowSize}; pico ${(result.trigger.confidence * 100).toInt()}%)"
                     } else {
                         "IA 1: não confirmou (${confirmation.positiveWindows}/${confirmation.requiredWindows}; pico ${(result.trigger.confidence * 100).toInt()}%)"
                     }
-                    val type = result.classification?.let { " · IA 2: ${labelFor(it.label)} ${(it.confidence * 100).toInt()}%" }.orEmpty()
-                    Text(trigger + type, color = if (result.alertTriggered) HealthyGreen else WarningAmber, fontWeight = FontWeight.SemiBold)
+                    val type = result.classification?.let {
+                        "IA 2: ${labelFor(it.label)} ${(it.confidence * 100).toInt()}%"
+                    } ?: "IA 2: resultado indisponível"
+                    val summary = if (result.ia1Bypassed || result.analysisMode == "uploaded_known_cry") {
+                        type
+                    } else {
+                        "$legacyTrigger · $type"
+                    }
+                    Text(summary, color = if (result.alertTriggered) HealthyGreen else WarningAmber, fontWeight = FontWeight.SemiBold)
                     Text(result.message, color = SoftText, style = MaterialTheme.typography.bodySmall)
                 }
             }

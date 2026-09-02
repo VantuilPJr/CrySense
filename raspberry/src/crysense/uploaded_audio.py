@@ -3,13 +3,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
-
 from .audio_features import decode_wav_bytes
 from .models import AudioClassifier, Prediction
-from .pipeline import CONFIRMATION_REQUIRED, CONFIRMATION_WINDOW, CryEvent
+from .pipeline import CryEvent
 
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+MIN_UPLOAD_SECONDS = 3.0
 
 
 def _prediction_dict(prediction: Prediction) -> dict:
@@ -20,50 +19,14 @@ def _prediction_dict(prediction: Prediction) -> dict:
     }
 
 
-def _confirmation_candidate(
-    predictions: list[Prediction],
-    trigger_threshold: float,
-) -> tuple[int, int, int, float] | None:
-    """Escolhe a janela 3/5 com maior evidência de choro e desempata pela mais antiga."""
-    candidates: list[tuple[int, float, int, int]] = []
-    for end_index in range(len(predictions)):
-        start_index = max(0, end_index - CONFIRMATION_WINDOW + 1)
-        window = predictions[start_index : end_index + 1]
-        probabilities = [prediction.scores.get("cry", 0.0) for prediction in window]
-        positive_count = sum(probability >= trigger_threshold for probability in probabilities)
-        if positive_count >= CONFIRMATION_REQUIRED:
-            candidates.append((positive_count, float(np.mean(probabilities)), start_index, end_index))
-    if not candidates:
-        return None
-    positive_count, mean_probability, start_index, end_index = max(
-        candidates,
-        key=lambda candidate: (candidate[0], candidate[1], -candidate[3]),
-    )
-    return start_index, end_index, positive_count, mean_probability
-
-
-def _best_unconfirmed_count(predictions: list[Prediction], trigger_threshold: float) -> int:
-    best = 0
-    for end_index in range(len(predictions)):
-        start_index = max(0, end_index - CONFIRMATION_WINDOW + 1)
-        probabilities = (
-            prediction.scores.get("cry", 0.0)
-            for prediction in predictions[start_index : end_index + 1]
-        )
-        best = max(best, sum(probability >= trigger_threshold for probability in probabilities))
-    return best
-
-
 def analyze_uploaded_wav(
     payload: bytes,
     filename: str,
-    trigger: AudioClassifier,
     type_classifier: AudioClassifier,
-    trigger_threshold: float,
     type_threshold: float,
     type_margin: float,
 ) -> tuple[dict, CryEvent | None]:
-    """Classifica um WAV manualmente e devolve um evento quando a decisão é confirmada."""
+    """Envia um choro já conhecido diretamente à IA 2 e gera evento quando o tipo é confirmado."""
     safe_filename = Path(filename or "audio.wav").name
     if not safe_filename.lower().endswith(".wav"):
         raise ValueError("Envie um arquivo .wav em PCM.")
@@ -71,101 +34,58 @@ def analyze_uploaded_wav(
         raise ValueError("O arquivo de áudio está vazio.")
     if len(payload) > MAX_UPLOAD_BYTES:
         raise ValueError("O arquivo é maior que 12 MB.")
-    if not trigger.ready or not type_classifier.ready:
-        raise RuntimeError("Os modelos de áudio ainda não estão prontos.")
+    if not type_classifier.ready:
+        raise RuntimeError("O modelo da IA 2 ainda não está pronto.")
 
     samples, sample_rate = decode_wav_bytes(payload)
     if samples.size == 0 or sample_rate <= 0:
         raise ValueError("O arquivo não possui amostras de áudio válidas.")
 
-    trigger_frame_samples = max(1, round(sample_rate * trigger.seconds))
-    trigger_predictions: list[Prediction] = []
-    trigger_windows: list[dict] = []
-    for index, start in enumerate(range(0, samples.size, trigger_frame_samples)):
-        stop = min(samples.size, start + trigger_frame_samples)
-        prediction = trigger.predict(samples[start:stop], sample_rate)
-        trigger_predictions.append(prediction)
-        trigger_windows.append(
-            {
-                "index": index,
-                "start_seconds": round(start / sample_rate, 3),
-                "end_seconds": round(stop / sample_rate, 3),
-                **_prediction_dict(prediction),
-            }
+    duration_seconds = samples.size / sample_rate
+    if duration_seconds < MIN_UPLOAD_SECONDS:
+        raise ValueError(
+            f"Envie pelo menos {MIN_UPLOAD_SECONDS:.0f} segundos de choro; o ideal é cerca de 6 segundos."
         )
-
-    trigger_prediction = max(
-        trigger_predictions,
-        key=lambda prediction: prediction.scores.get("cry", 0.0),
-    )
-    confirmation = _confirmation_candidate(trigger_predictions, trigger_threshold)
-    positive_windows = (
-        confirmation[2]
-        if confirmation is not None
-        else _best_unconfirmed_count(trigger_predictions, trigger_threshold)
-    )
-    result: dict = {
-        "filename": safe_filename,
-        "duration_seconds": round(samples.size / sample_rate, 2),
-        "sample_rate": sample_rate,
-        "trigger": _prediction_dict(trigger_prediction),
-        "trigger_windows": trigger_windows,
-        "trigger_confirmation": {
-            "confirmed": confirmation is not None,
-            "positive_windows": positive_windows,
-            "required_windows": CONFIRMATION_REQUIRED,
-            "window_size": CONFIRMATION_WINDOW,
-            "analyzed_windows": len(trigger_predictions),
-        },
-        "classification": None,
-        "alert_triggered": False,
-        "message": (
-            f"A IA 1 encontrou somente {positive_windows} de {CONFIRMATION_REQUIRED} "
-            "janelas de choro necessárias para confirmar este áudio."
-        ),
-    }
-    if confirmation is None:
-        return result, None
-
-    _, confirmation_end_index, positive_windows, mean_probability = confirmation
-    confirmation_end_sample = min(samples.size, (confirmation_end_index + 1) * trigger_frame_samples)
     type_frame_samples = max(1, round(sample_rate * type_classifier.seconds))
-    selected_start = max(0, confirmation_end_sample - type_frame_samples)
-    selected_stop = min(samples.size, selected_start + type_frame_samples)
-    if selected_stop - selected_start < type_frame_samples and samples.size >= type_frame_samples:
-        selected_start = samples.size - type_frame_samples
-        selected_stop = samples.size
-
-    type_prediction = type_classifier.predict(samples[selected_start:selected_stop], sample_rate)
+    selected_stop = min(samples.size, type_frame_samples)
+    type_prediction = type_classifier.predict(samples[:selected_stop], sample_rate)
     values = sorted(type_prediction.scores.values(), reverse=True)
     margin = values[0] - values[1] if len(values) > 1 else 1.0
-    result["trigger_confirmation"].update(
-        {
-            "positive_windows": positive_windows,
-            "mean_cry_confidence": mean_probability,
-            "confirmation_end_seconds": round(confirmation_end_sample / sample_rate, 3),
-        }
-    )
-    result["selected_clip"] = {
-        "start_seconds": round(selected_start / sample_rate, 3),
-        "end_seconds": round(selected_stop / sample_rate, 3),
+
+    result: dict = {
+        "filename": safe_filename,
+        "duration_seconds": round(duration_seconds, 2),
+        "sample_rate": sample_rate,
+        "source": "upload",
+        "analysis_mode": "uploaded_known_cry",
+        "ia1_bypassed": True,
+        "selected_clip": {
+            "start_seconds": 0.0,
+            "end_seconds": round(selected_stop / sample_rate, 3),
+            "model_window_seconds": type_classifier.seconds,
+            "padded_seconds": round(max(0.0, type_classifier.seconds - duration_seconds), 3),
+            "truncated": samples.size > type_frame_samples,
+        },
+        "classification": {**_prediction_dict(type_prediction), "margin": margin},
+        "alert_triggered": False,
+        "message": "O choro enviado foi analisado diretamente pela IA 2.",
     }
-    result["classification"] = _prediction_dict(type_prediction)
-    result["classification"]["margin"] = margin
     if type_prediction.confidence < type_threshold or margin < type_margin:
         result["message"] = (
-            "A IA 1 confirmou o choro, mas a IA 2 não atingiu a confiança e a margem "
-            "necessárias para gerar o alerta."
+            "A IA 2 analisou o choro enviado, mas não atingiu a confiança e a margem "
+            "necessárias para confirmar cólica ou fome."
         )
         return result, None
 
-    result["message"] = "Choro e tipo confirmados. O mesmo alerta do monitoramento ao vivo foi acionado."
+    result["message"] = "Tipo do choro confirmado pela IA 2. O mesmo alerta do monitoramento ao vivo foi acionado."
     result["alert_triggered"] = True
     event = CryEvent(
         timestamp=datetime.now(UTC).isoformat(),
         label=type_prediction.label,
         confidence=type_prediction.confidence,
-        trigger_confidence=trigger_prediction.confidence,
+        # Campo legado obrigatório no SQLite: 1.0 representa que o upload foi
+        # declarado como choro pelo usuário, não uma inferência da IA 1.
+        trigger_confidence=1.0,
         scores=type_prediction.scores,
     )
     return result, event

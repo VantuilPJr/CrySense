@@ -26,13 +26,8 @@ class AudioDecisionTest {
         val response = Gson().fromJson(
             """
             {
-              "trigger": {"label": "cry", "confidence": 0.966},
-              "trigger_confirmation": {
-                "confirmed": true,
-                "positive_windows": 3,
-                "required_windows": 3,
-                "window_size": 5
-              },
+              "analysis_mode": "uploaded_known_cry",
+              "ia1_bypassed": true,
               "classification": {"label": "colic", "confidence": 0.693},
               "alert_triggered": true,
               "message": "Alerta acionado"
@@ -42,8 +37,8 @@ class AudioDecisionTest {
         )
 
         assertTrue(response.alertTriggered)
-        assertTrue(response.triggerConfirmation.confirmed)
-        assertEquals(3, response.triggerConfirmation.positiveWindows)
+        assertTrue(response.ia1Bypassed)
+        assertEquals("uploaded_known_cry", response.analysisMode)
         assertEquals("colic", response.classification?.label)
     }
 }

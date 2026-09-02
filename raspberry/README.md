@@ -43,14 +43,14 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 - **Aplicativo móvel:** Kotlin e Jetpack Compose para Android.
 - **Transmissão:** vídeo MJPEG e comunicação HTTP pela rede Wi-Fi local.
 - **Sensoriamento:** BME280, microfone digital INMP441, amplificador MAX98357A e tela TFT ST7735.
-- **Pipeline em duas etapas:** a IA de classificação do tipo só é executada após a confirmação do choro.
-- **Confirmação temporal:** limiares de confiança e múltiplas janelas consecutivas reduzem ativações isoladas.
+- **Pipeline em duas etapas no tempo real:** a IA de classificação do tipo só é executada após a confirmação do choro captado pelo microfone.
+- **Confirmação temporal da escuta ativa:** limiares de confiança e múltiplas janelas consecutivas reduzem ativações isoladas.
 - **Arquitetura local-first:** áudio, eventos e dados sensíveis permanecem sob controle da rede local.
 
 ## Arquitetura técnica
 
 1. **IA 1 — trigger:** `cry` × `noise`, Random Forest sobre uma janela de áudio de 1 segundo.
-2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos que preserva as janelas responsáveis pelo gatilho, executado após a confirmação de choro em 3 de 5 janelas.
+2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos. Na escuta ativa, ela roda após a IA 1 confirmar choro em 3 de 5 janelas; no upload, recebe diretamente o arquivo que o usuário já informou conter choro.
 3. **Aplicação:** FastAPI local, SQLite, BME280, TFT ST7735 e webcam USB. O dashboard móvel é servido na própria rede Wi-Fi.
 4. **Visão opcional no computador:** o Raspberry só entrega o MJPEG. Um processo Python no computador executa OpenCV + YOLO, confirma padrões de risco e devolve o alerta pela rede local.
 
@@ -98,9 +98,9 @@ Abra `http://127.0.0.1:8080`. Por padrão, webcam, áudio, BME280 e TFT ficam de
 
 ## Demonstração em feira: análise de áudio enviado
 
-O dashboard possui a seção **Analisar áudio para demonstração**. Se o ruído da feira tornar o microfone inadequado, envie um arquivo **WAV PCM** de até 12 MB. A IA 1 percorre todo o arquivo em janelas de um segundo e exige três confirmações nas cinco janelas recentes. Em seguida, a IA 2 analisa uma janela de seis segundos que contém o trecho confirmado e classifica `cólica` × `fome`.
+O dashboard possui a seção **Analisar áudio para demonstração**. Se o ruído da feira tornar o microfone inadequado, envie um arquivo **WAV PCM** de até 12 MB que você já sabe conter choro, preferencialmente com cerca de seis segundos. O upload não executa a IA 1: o arquivo segue diretamente para a IA 2, que classifica `cólica` × `fome`.
 
-Essa análise é manual, mas uma confirmação válida de cólica ou fome passa pelo mesmo fluxo de alerta do microfone: cria ocorrência, atualiza o app, mostra a mensagem na TFT e executa a ação configurada para cada tipo. Para a demonstração, mantenha alguns WAVs curtos já preparados no computador.
+Se a IA 2 atingir os limiares de confiança e margem, a decisão passa pelo mesmo fluxo de alerta do microfone: cria ocorrência, atualiza o app, mostra a mensagem na TFT e executa a ação configurada para cada tipo. A IA 1 permanece exclusiva da escuta ativa em tempo real.
 
 ## Visão no computador (OpenCV + YOLO)
 

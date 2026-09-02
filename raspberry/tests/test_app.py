@@ -87,7 +87,7 @@ def test_pink_noise_volume_is_configurable_and_bounded(tmp_path: Path, monkeypat
     assert PinkNoisePlayer(volume=2).volume == 1
 
 
-def test_uploaded_wav_uses_both_audio_models_and_vision_reports(tmp_path: Path) -> None:
+def test_uploaded_wav_bypasses_trigger_model_and_vision_reports(tmp_path: Path) -> None:
     settings = Settings(
         home=tmp_path,
         data_dir=tmp_path / "data",
@@ -116,12 +116,14 @@ def test_uploaded_wav_uses_both_audio_models_and_vision_reports(tmp_path: Path) 
         type_margin=0.20,
     )
     with TestClient(create_app(settings)) as client:
-        client.app.state.pipeline.trigger.model = ProbabilityModel(("cry", "noise"), (0.93, 0.07))
         client.app.state.pipeline.type_classifier.model = ProbabilityModel(("colic", "hunger"), (0.18, 0.82))
         response = client.post("/api/audio/analyze", files={"audio": ("demonstração.wav", wav_payload(), "audio/wav")})
         assert response.status_code == 200
         result = response.json()
-        assert result["trigger"]["label"] == "cry"
+        assert client.app.state.pipeline.trigger.ready is False
+        assert result["analysis_mode"] == "uploaded_known_cry"
+        assert result["ia1_bypassed"] is True
+        assert "trigger" not in result
         assert result["classification"]["label"] == "hunger"
         assert client.get("/api/events").json()["events"][0]["label"] == "hunger"
 
