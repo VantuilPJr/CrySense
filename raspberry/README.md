@@ -50,7 +50,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 ## Arquitetura técnica
 
 1. **IA 1 — trigger:** `cry` × `noise`, Random Forest sobre uma janela de áudio de 1 segundo.
-2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos. Na escuta ativa, ela roda após a IA 1 confirmar choro em 3 de 5 janelas; no upload, recebe diretamente o arquivo que o usuário já informou conter choro.
+2. **IA 2 — tipo:** `colic` × `hunger`, Random Forest sobre um clip de 6 segundos. Na escuta ativa, ela roda após a IA 1 confirmar choro em 3 de 5 janelas. O recorte preserva o início candidato do choro; se a classificação não atingir os limites, o painel informa que ela foi inconclusiva e o sistema confirma um novo trecho para tentar novamente. Somente uma classificação aceita trava o alerta até o rearme por silêncio. No upload, a IA 2 recebe diretamente o arquivo que o usuário já informou conter choro.
 3. **Aplicação:** FastAPI local, SQLite, BME280, TFT ST7735 e webcam USB. O dashboard móvel é servido na própria rede Wi-Fi.
 4. **Visão opcional no computador:** o Raspberry só entrega o MJPEG. Um processo Python no computador executa OpenCV + YOLO, confirma padrões de risco e devolve o alerta pela rede local.
 

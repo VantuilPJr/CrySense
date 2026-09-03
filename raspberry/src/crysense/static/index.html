@@ -273,12 +273,58 @@
     }
 
     function setPrediction(pipeline) {
-      text(byId('phase'), human(pipeline.phase), pipeline.last_error ? 'bad' : 'good');
       const trigger = pipeline.last_trigger;
-      const type = pipeline.last_type;
-      const triggerText = trigger ? `IA 1: ${human(trigger.label)} ${Math.round(trigger.confidence * 100)}%` : 'IA 1 aguardando áudio';
-      const typeText = type ? ` · IA 2: ${human(type.label)} ${Math.round(type.confidence * 100)}%` : '';
-      byId('prediction').textContent = pipeline.last_error || triggerText + typeText;
+      const confirmation = pipeline.confirmation || {};
+      const decision = pipeline.last_type_decision;
+      const positives = confirmation.positive_windows || 0;
+      const required = confirmation.required_windows || 3;
+      const triggerConfidence = trigger ? Math.round(trigger.confidence * 100) : 0;
+
+      if (pipeline.last_error) {
+        text(byId('phase'), 'Erro na análise', 'bad');
+        byId('prediction').textContent = pipeline.last_error;
+        return;
+      }
+      if (pipeline.phase === 'capturing_type_audio') {
+        const progress = Math.round((pipeline.capture_progress || 0) * 100);
+        text(byId('phase'), 'IA 2 analisando', 'warning');
+        byId('prediction').textContent = `Choro confirmado · coletando trecho ${progress}% · tentativa ${pipeline.type_attempt || 1}`;
+        return;
+      }
+      if (decision && decision.state === 'inconclusive' &&
+          (decision.retry_scheduled ||
+            ((decision.age_seconds == null || decision.age_seconds < 15) && positives === 0))) {
+        const prediction = decision.prediction;
+        const result = prediction
+          ? `${human(prediction.label)} ${Math.round(prediction.confidence * 100)}%`
+          : 'sem classificação';
+        const minimum = Math.round((decision.confidence_threshold || 0) * 100);
+        text(byId('phase'), 'IA 2 inconclusiva', 'warning');
+        byId('prediction').textContent = decision.retry_scheduled
+          ? `${result} (mínimo ${minimum}%) · nova tentativa: IA 1 ${positives}/${required}`
+          : `${result} (mínimo ${minimum}%) · aguardando um novo choro`;
+        return;
+      }
+      if (decision && decision.state === 'accepted' && (decision.age_seconds == null || decision.age_seconds < 15)) {
+        const prediction = decision.prediction;
+        text(byId('phase'), 'Choro classificado', 'good');
+        byId('prediction').textContent = prediction
+          ? `IA 2: ${human(prediction.label)} ${Math.round(prediction.confidence * 100)}% · alerta confirmado`
+          : 'Alerta confirmado';
+        return;
+      }
+      if (positives > 0) {
+        text(byId('phase'), 'Confirmando choro', 'warning');
+        const current = trigger && trigger.label === 'cry'
+          ? `choro ${triggerConfidence}%`
+          : `quadro atual: ruído ${triggerConfidence}%`;
+        byId('prediction').textContent = `IA 1: ${positives}/${required} janelas de choro · ${current}`;
+        return;
+      }
+      text(byId('phase'), human(pipeline.phase), 'good');
+      byId('prediction').textContent = trigger
+        ? `IA 1: ${human(trigger.label)} ${triggerConfidence}% · aguardando choro`
+        : 'IA 1 aguardando áudio';
     }
 
     function setVision(status) {

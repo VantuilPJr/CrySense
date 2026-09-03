@@ -165,26 +165,56 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.display_alert = None
             accent = (25, 125, 155)
             crying_baby = False
+            pipeline_status = pipeline.status()
+            confirmation = pipeline_status["confirmation"]
+            decision = pipeline_status["last_type_decision"]
             if not audio.listening:
                 status = "MICROFONE INATIVO"
                 detail = audio.error or ("Inicializando captura" if audio.running else "Aguardando microfone")
                 accent = (215, 137, 42)
-            elif pipeline.phase == "error":
+            elif pipeline_status["phase"] == "error":
                 status = "ERRO NA IA"
-                detail = pipeline.last_error or "Falha ao analisar o audio"
+                detail = pipeline_status["last_error"] or "Falha ao analisar o audio"
                 accent = (190, 67, 72)
-            elif pipeline.phase == "capturing_type_audio":
+            elif pipeline_status["phase"] == "capturing_type_audio":
                 status = "ANALISANDO CHORO"
-                detail = "Identificando fome ou colica"
+                detail = f"IA 2 {pipeline_status['capture_progress']:.0%}\nTentativa {pipeline_status['type_attempt']}"
                 accent = (221, 133, 42)
                 crying_baby = True
             elif (
-                pipeline.last_trigger
-                and pipeline.last_trigger.label == "cry"
-                and pipeline.last_trigger.confidence >= settings.trigger_threshold
+                decision
+                and decision["state"] == "inconclusive"
+                and (
+                    decision["retry_scheduled"]
+                    or (
+                        (decision["age_seconds"] is None or decision["age_seconds"] < 15)
+                        and confirmation["positive_windows"] == 0
+                    )
+                )
             ):
-                status = "CHORO DETECTADO"
-                detail = f"IA 1 {pipeline.last_trigger.confidence:.0%} - confirmando"
+                prediction = decision["prediction"]
+                label = "SEM RESULTADO" if prediction is None else (
+                    "CÓLICA" if prediction["label"] == "colic" else "FOME"
+                )
+                confidence = "--" if prediction is None else f"{prediction['confidence']:.0%}"
+                status = "IA 2 INCONCLUSIVA"
+                if decision["retry_scheduled"]:
+                    detail = (
+                        f"{label} {confidence}\n"
+                        f"Nova tentativa {confirmation['positive_windows']}/{confirmation['required_windows']}"
+                    )
+                else:
+                    detail = f"{label} {confidence}\nAguardando choro"
+                accent = (221, 133, 42)
+                crying_baby = True
+            elif confirmation["positive_windows"] > 0:
+                status = (
+                    f"CHORO {confirmation['positive_windows']}/{confirmation['required_windows']}"
+                )
+                last_trigger = pipeline_status["last_trigger"]
+                confidence = last_trigger["confidence"] if last_trigger else 0.0
+                current_label = "CHORO" if last_trigger and last_trigger["label"] == "cry" else "RUÍDO"
+                detail = f"{current_label} {confidence:.0%}\nConfirmando"
                 accent = (221, 133, 42)
                 crying_baby = True
             else:

@@ -61,7 +61,13 @@ def test_dashboard_and_status_work_without_peripherals(tmp_path: Path) -> None:
         assert client.get("/").status_code == 200
         health = client.get("/api/health")
         assert health.json() == {"ok": True, "trigger_ready": False, "type_ready": False}
-        assert client.get("/api/status").status_code == 200
+        status = client.get("/api/status")
+        assert status.status_code == 200
+        pipeline = status.json()["pipeline"]
+        assert pipeline["confirmation"]["required_windows"] == 3
+        assert pipeline["capture_progress"] == 0.0
+        assert pipeline["last_type_decision"] is None
+        assert pipeline["alert_latched"] is False
 
 
 def test_relative_env_paths_are_inside_project_home(tmp_path: Path, monkeypatch) -> None:

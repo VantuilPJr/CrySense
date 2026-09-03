@@ -34,6 +34,26 @@ data class PredictionDto(
     val confidence: Double = 0.0,
 )
 
+data class PipelineConfirmationDto(
+    @SerializedName("positive_windows") val positiveWindows: Int = 0,
+    @SerializedName("required_windows") val requiredWindows: Int = 3,
+    @SerializedName("window_size") val windowSize: Int = 5,
+    @SerializedName("evaluated_windows") val evaluatedWindows: Int = 0,
+)
+
+data class TypeDecisionDto(
+    val state: String = "",
+    val timestamp: String? = null,
+    @SerializedName("age_seconds") val ageSeconds: Double? = null,
+    val attempt: Int = 1,
+    val prediction: PredictionDto? = null,
+    val margin: Double? = null,
+    @SerializedName("confidence_threshold") val confidenceThreshold: Double? = null,
+    @SerializedName("margin_threshold") val marginThreshold: Double? = null,
+    val reason: String? = null,
+    @SerializedName("retry_scheduled") val retryScheduled: Boolean? = null,
+)
+
 data class PipelineDto(
     val phase: String = "idle",
     @SerializedName("trigger_ready") val triggerReady: Boolean = false,
@@ -41,6 +61,11 @@ data class PipelineDto(
     @SerializedName("last_trigger") val lastTrigger: PredictionDto? = null,
     @SerializedName("last_type") val lastType: PredictionDto? = null,
     @SerializedName("last_error") val lastError: String? = null,
+    val confirmation: PipelineConfirmationDto? = null,
+    @SerializedName("capture_progress") val captureProgress: Double? = null,
+    @SerializedName("last_type_decision") val lastTypeDecision: TypeDecisionDto? = null,
+    @SerializedName("alert_latched") val alertLatched: Boolean? = null,
+    @SerializedName("episode_active") val episodeActive: Boolean? = null,
 )
 
 data class AudioDto(

@@ -611,16 +611,65 @@ private const val MAX_JPEG_FRAME_BYTES = 2 * 1024 * 1024
 private fun MonitoringCard(state: RaspberryMonitorState) {
     val pipeline = state.status.pipeline
     val audio = state.status.audio
-    val mainLabel = when (pipeline.phase) {
-        "capturing_type_audio" -> "Analisando o choro"
-        "monitoring" -> "Monitorando"
-        "error" -> "Atenção necessária"
+    val confirmation = pipeline.confirmation
+    val positiveWindows = confirmation?.positiveWindows ?: 0
+    val requiredWindows = (confirmation?.requiredWindows ?: 3).coerceAtLeast(1)
+    val captureProgress = pipeline.captureProgress?.coerceIn(0.0, 1.0)
+    val isCapturingType = pipeline.phase == "capturing_type_audio"
+    val decision = pipeline.lastTypeDecision
+    val decisionIsRecent = decision?.ageSeconds?.let { it <= 15.0 } ?: true
+    val isInconclusive = decision?.state.equals("inconclusive", ignoreCase = true) &&
+        (decision?.retryScheduled == true || pipeline.episodeActive == true || (decisionIsRecent && positiveWindows == 0))
+    val hasIa1Progress = positiveWindows > 0 && pipeline.alertLatched != true
+    val decisionPrediction = decision?.prediction
+    val audioLevel = ((audio.levelRms ?: 0.0) * 8).coerceIn(0.0, 1.0).toFloat()
+
+    val mainLabel = when {
+        isCapturingType -> "IA 2 · analisando o choro"
+        isInconclusive -> "IA 2 inconclusiva"
+        hasIa1Progress -> "IA 1 · choro $positiveWindows/$requiredWindows"
+        pipeline.phase == "monitoring" -> "Monitorando"
+        pipeline.phase == "error" -> "Atenção necessária"
         else -> "Aguardando áudio"
     }
-    val latest = pipeline.lastType ?: pipeline.lastTrigger
-    val description = latest?.let { "${labelFor(it.label)} · ${(it.confidence * 100).toInt()}%" }
-        ?: if (audio.listening) "Microfone ouvindo" else "Microfone indisponível"
-    val level = ((audio.levelRms ?: 0.0) * 8).coerceIn(0.0, 1.0).toFloat()
+    val description = when {
+        isCapturingType -> captureProgress?.let { "Captura para classificação · ${percentOf(it)}%" }
+            ?: "Capturando áudio para classificação"
+        isInconclusive -> {
+            val predictionText = decisionPrediction?.let {
+                "${labelFor(it.label)} · ${percentOf(it.confidence)}%"
+            } ?: "Classificação sem confiança suficiente"
+            val minimumText = decision?.confidenceThreshold?.let { " · mínimo ${percentOf(it)}%" }.orEmpty()
+            predictionText + minimumText
+        }
+        hasIa1Progress -> pipeline.lastTrigger?.let {
+            if (it.label.equals("cry", ignoreCase = true)) {
+                "Choro detectado com ${percentOf(it.confidence)}% de confiança"
+            } else {
+                "IA 1 mantém $positiveWindows/$requiredWindows · quadro atual: ${labelFor(it.label)} ${percentOf(it.confidence)}%"
+            }
+        } ?: "Confirmando o padrão de choro"
+        else -> (pipeline.lastType ?: pipeline.lastTrigger)?.let {
+            "${labelFor(it.label)} · ${percentOf(it.confidence)}%"
+        } ?: if (audio.listening) "Microfone ouvindo" else "Microfone indisponível"
+    }
+    val statusLine = when {
+        isCapturingType -> captureProgress?.let { "IA 2 em andamento · ${percentOf(it)}%" }
+            ?: "IA 2 em andamento"
+        isInconclusive && decision?.retryScheduled == true && hasIa1Progress ->
+            "Nova tentativa · IA 1: choro $positiveWindows/$requiredWindows"
+        isInconclusive && decision?.retryScheduled == true -> "Nova tentativa aguardando confirmação do choro"
+        isInconclusive -> inconclusiveReason(decision?.reason)
+        hasIa1Progress -> "IA 1 confirmando o choro"
+        audio.listening -> "Ouvindo agora"
+        else -> audio.error ?: "Verificando áudio"
+    }
+    val indicatorProgress = if (isCapturingType) captureProgress?.toFloat() ?: audioLevel else audioLevel
+    val statusColor = when {
+        isInconclusive -> WarningAmber
+        audio.listening -> HealthyGreen
+        else -> WarningAmber
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -633,18 +682,28 @@ private fun MonitoringCard(state: RaspberryMonitorState) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Default.Mic, contentDescription = null, tint = if (audio.listening) HealthyGreen else WarningAmber, modifier = Modifier.size(34.dp))
+            Icon(Icons.Default.Mic, contentDescription = null, tint = statusColor, modifier = Modifier.size(34.dp))
             Text(mainLabel, color = PastelBlueDark, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(description, color = SoftText, style = MaterialTheme.typography.bodyMedium)
-            Text(if (audio.listening) "Ouvindo agora" else (audio.error ?: "Verificando áudio"), color = if (audio.listening) HealthyGreen else WarningAmber, style = MaterialTheme.typography.labelMedium)
+            Text(description, color = SoftText, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(statusLine, color = statusColor, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
             LinearProgressIndicator(
-                progress = { level },
+                progress = { indicatorProgress },
                 modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(99.dp)),
-                color = PastelBlueDark,
+                color = if (isInconclusive) WarningAmber else PastelBlueDark,
                 trackColor = PastelBlueMain.copy(alpha = 0.35f),
             )
         }
     }
+}
+
+private fun percentOf(value: Double): Int = (value.coerceIn(0.0, 1.0) * 100).toInt()
+
+private fun inconclusiveReason(reason: String?): String = when (reason) {
+    "low_confidence" -> "Confiança abaixo do mínimo; aguardando nova confirmação"
+    "low_margin" -> "Resultado muito próximo entre fome e cólica"
+    "low_confidence_and_margin" -> "Confiança e diferença entre classes insuficientes"
+    "inference_error" -> "Não foi possível concluir esta análise"
+    else -> "Aguardando uma nova confirmação do choro"
 }
 
 @Composable
