@@ -1,12 +1,16 @@
 # CrySense AI
 
-> Babá eletrônica inteligente com análise local de choro, monitoramento ambiental, vídeo em tempo real e detecção visual de situações de risco no berço.
+> Protótipo de IA e IoT para monitoramento infantil: análise de áudio, sensores ambientais, vídeo e aplicativo Android.
+
+**Estado:** protótipo experimental, dependente do hardware e da configuração descritos na documentação. As classificações de áudio não são diagnósticos nem prova clínica de fome ou cólica.
+
+**Stack:** Python · FastAPI · scikit-learn · OpenCV/YOLO · Kotlin/Jetpack Compose · Raspberry Pi
 
 ## Sobre o projeto
 
 O **CrySense AI** foi criado para oferecer mais tranquilidade e segurança aos cuidadores, especialmente a pais de primeira viagem. Em vez de apenas transmitir áudio e vídeo, o sistema utiliza inteligência artificial para identificar o choro do bebê e classificar seu padrão como mais associado à **fome** ou à **cólica**.
 
-O áudio é convertido em uma representação bidimensional na escala **Mel**. A partir desse espectrograma, os modelos extraem características acústicas e comparam o padrão analisado com os exemplos utilizados no treinamento. O processamento acontece em duas etapas: a primeira IA diferencia `choro` de `ruído`; a segunda é executada somente após a confirmação do choro e o classifica como `fome` ou `cólica`.
+Conforme a implementação documentada em `raspberry/README.md`, o áudio é padronizado em 16 kHz e convertido em descritores temporais e espectrais, como energia, cruzamento por zero, centroide, largura de banda e fluxo espectral. Os modelos comparam essas características com os exemplos utilizados no treinamento. O processamento acontece em duas etapas: a primeira IA diferencia `choro` de `ruído`; a segunda é executada somente após a confirmação do choro e o classifica como `fome` ou `cólica`.
 
 O sistema também reúne vídeo ao vivo, dados ambientais e visão computacional. O Raspberry Pi transmite as imagens pela rede local, enquanto um computador pode executar **OpenCV + YOLO** para localizar pessoas com *bounding boxes* e verificar a entrada em uma zona de risco desenhada pelo próprio usuário sobre o berço. Alertas, medições e ocorrências ficam disponíveis no aplicativo Android, no painel web e na tela TFT.
 
@@ -22,7 +26,7 @@ O choro é um dos principais meios de comunicação do bebê, mas sua interpreta
 
 ```mermaid
 flowchart LR
-    M[Microfone] --> A[Espectrograma Mel]
+    M[Microfone] --> A[Características temporais e espectrais]
     A --> IA1[IA 1: choro ou ruído]
     IA1 -->|choro confirmado| IA2[IA 2: fome ou cólica]
     C[Webcam] --> R[Raspberry Pi: transmissão MJPEG]
@@ -43,7 +47,7 @@ O Raspberry Pi permanece responsável pela captura de áudio, sensores, interfac
 - Monitoramento contínuo do áudio e do ambiente.
 - Detecção de `choro` × `ruído`.
 - Classificação do choro como `fome` × `cólica`.
-- Conversão do áudio em espectrogramas na escala Mel.
+- Extração de características temporais e espectrais do áudio.
 - Análise de arquivos WAV para demonstrações em ambientes barulhentos.
 - Vídeo ao vivo no painel web e no aplicativo Android.
 - Detecção de pessoas com YOLO e exibição de *bounding boxes*.
@@ -61,7 +65,7 @@ O Raspberry Pi permanece responsável pela captura de áudio, sensores, interfac
 | Computação embarcada | Raspberry Pi 3B e Raspberry Pi OS Lite |
 | Backend | Python, FastAPI, API REST e SQLite |
 | Aprendizado de máquina | scikit-learn, Random Forest, NumPy e Joblib |
-| Processamento de áudio | Análise espectral e escala Mel |
+| Processamento de áudio | Descritores temporais e espectrais |
 | Visão computacional | OpenCV e Ultralytics YOLO |
 | Aplicativo móvel | Kotlin e Jetpack Compose |
 | Comunicação | Wi-Fi local, HTTP e vídeo MJPEG |
@@ -98,3 +102,13 @@ Para o aplicativo, siga [`android/README.md`](android/README.md). O painel princ
 ## Dados e privacidade
 
 O processamento principal foi projetado para ocorrer localmente. Credenciais, bancos de eventos, registros de execução, ambientes virtuais e artefatos de compilação não fazem parte do repositório. Antes de usar o sistema com dados reais, revise permissões de rede, retenção de eventos e consentimento para captação de áudio e vídeo.
+
+## Escopo e avaliação
+
+Este repositório apresenta uma implementação baseada em Raspberry Pi e aplicativo Android. A implementação baseada em ESP32 está em [CrySenseAI](https://github.com/VantuilPJr/CrySenseAI); os dois projetos têm hardware e instruções próprios.
+
+As descrições de classificação indicam o objetivo e o comportamento do protótipo, sem afirmar precisão clínica, certificação ou desempenho generalizável. O modelo depende da qualidade dos dados, das condições de captação e da validação no ambiente de uso. Consulte a documentação do Raspberry para conhecer treinamento, execução e testes disponíveis.
+
+## English summary
+
+CrySense is an experimental baby-monitoring prototype combining a two-stage audio classifier, environmental sensors, local video, an Android app and optional computer-vision processing on a separate computer. It uses Python/FastAPI, scikit-learn, Kotlin and Raspberry Pi. Its cry labels are experimental classifications, not medical diagnoses or clinically validated determinations. Setup and test instructions are maintained in the Raspberry and Android documentation.
